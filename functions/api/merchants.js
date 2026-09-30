@@ -22,14 +22,15 @@ export async function onRequestGet({ request, env }) {
 }
 
 export async function onRequestPost({ request, env }) {
-  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-  if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) return unauthorized()
-
   let body
   try {
     body = await request.json()
   } catch {
     return Response.json({ error: 'JSON inválido' }, { status: 400 })
+  }
+
+  if (typeof body.website === 'string' && body.website.trim()) {
+    return Response.json({ error: 'Não foi possível concluir o cadastro' }, { status: 400 })
   }
 
   const required = ['businessName', 'ownerName', 'email', 'city', 'state']
