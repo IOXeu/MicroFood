@@ -38,10 +38,24 @@ export async function onRequestPost({ request, env }) {
   }
 
   const trialEndsAt = new Date(Date.now() + 7 * 86400000).toISOString()
-  const result = await env.DB.prepare(`
-    INSERT INTO merchants (business_name, owner_name, email, phone, city, state, trial_ends_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(body.businessName.trim(), body.ownerName.trim(), body.email.trim().toLowerCase(), body.phone?.trim() || null, body.city.trim(), body.state.trim().toUpperCase(), trialEndsAt).run()
+  const businessName = body.businessName.trim()
+  const slugBase = businessName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'comerciante'
+  const slug = `${slugBase}-${Date.now().toString(36)}`
+  const email = body.email.trim().toLowerCase()
 
-  return Response.json({ id: result.meta.last_row_id, trialEndsAt }, { status: 201 })
+  try {
+    const result = await env.DB.prepare(`
+      INSERT INTO merchants (business_name, owner_name, email, phone, city, state, slug, trial_ends_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(businessName, body.ownerName.trim(), email, body.phone?.trim() || null, body.city.trim(), body.state.trim().toUpperCase(), slug, trialEndsAt).run()
+
+    await env.DB.prepare(`
+      INSERT INTO subscriptions (merchant_id, trial_ends_at) VALUES (?, ?)
+    `).bind(result.meta.last_row_id, trialEndsAt).run()
+
+    return Response.json({ id: result.meta.last_row_id, slug, trialEndsAt }, { status: 201 })
+  } catch (error) {
+    if (String(error).toLowerCase().includes('unique')) return Response.json({ error: 'Este e-mail já está cadastrado' }, { status: 409 })
+    return Response.json({ error: 'Não foi possível concluir o cadastro' }, { status: 500 })
+  }
 }
