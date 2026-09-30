@@ -1,6 +1,6 @@
 PRAGMA foreign_keys = ON;
 
--- Comerciantes cadastrados na plataforma MicroFoodBR.
+-- Comerciantes cadastrados na plataforma MicroFood.dev.
 CREATE TABLE IF NOT EXISTS merchants (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   business_name TEXT NOT NULL,
@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS merchant_users (
   FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE
 );
 
--- Cardápio publicado por cada comerciante.
+-- Cardápio publicado por cada comerciante. A imagem fica no D1 como BLOB;
+-- image_url é mantida para compatibilidade com registros antigos.
 CREATE TABLE IF NOT EXISTS menu_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   merchant_id INTEGER NOT NULL,
@@ -42,11 +43,26 @@ CREATE TABLE IF NOT EXISTS menu_items (
   category TEXT NOT NULL DEFAULT 'Lanches',
   price_cents INTEGER NOT NULL CHECK (price_cents > 0),
   image_url TEXT,
+  image_blob BLOB,
+  image_mime TEXT,
+  image_updated_at TEXT,
   available INTEGER NOT NULL DEFAULT 1 CHECK (available IN (0, 1)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE,
+  CHECK (image_blob IS NULL OR image_mime IN ('image/jpeg', 'image/png', 'image/webp'))
+);
+
+-- Controle das imagens da vitrine: até 20 imagens ativas e 6 substituições
+-- por mês por loja. O limite é aplicado pela API ao inserir/substituir.
+CREATE TABLE IF NOT EXISTS merchant_photo_usage (
+  merchant_id INTEGER PRIMARY KEY,
+  replacement_month TEXT NOT NULL,
+  replacements_used INTEGER NOT NULL DEFAULT 0 CHECK (replacements_used BETWEEN 0 AND 6),
   FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_menu_items_merchant_available ON menu_items(merchant_id, available);
 
 -- Pedidos feitos pelos clientes no cardápio público.
 CREATE TABLE IF NOT EXISTS orders (
@@ -104,7 +120,6 @@ CREATE TABLE IF NOT EXISTS payment_events (
 CREATE INDEX IF NOT EXISTS idx_merchants_status ON merchants(status);
 CREATE INDEX IF NOT EXISTS idx_merchants_city_state ON merchants(city, state);
 CREATE INDEX IF NOT EXISTS idx_merchant_users_merchant ON merchant_users(merchant_id);
-CREATE INDEX IF NOT EXISTS idx_menu_items_merchant_available ON menu_items(merchant_id, available);
 CREATE INDEX IF NOT EXISTS idx_orders_merchant_status ON orders(merchant_id, status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
