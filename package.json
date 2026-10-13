@@ -1,5 +1,10 @@
 {
-  "dependencies": {
-    "pg": "^8.23.0"
-  }
+  "name": "microfoodbr",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev .",
+    "deploy": "wrangler pages deploy ."
+  },
+  "dependencies": {}
 }
