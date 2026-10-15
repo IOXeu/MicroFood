@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Painel administrativo | MicroFoodBR</title>
+  <style>
+    :root{--ink:#17352c;--muted:#65736b;--green:#2c624d;--lime:#d7df9d;--orange:#e8794d;--cream:#f7f3eb;--line:#e1e5dc;--white:#fff;--red:#a93f35;--gold:#8b6412;--shadow:0 18px 50px #17352c12}
+    *{box-sizing:border-box}body{margin:0;background:#f4f5f1;color:var(--ink);font:14px/1.5 'DM Sans',Inter,system-ui,-apple-system,Segoe UI,sans-serif}button,input,select{font:inherit}button{cursor:pointer}.hidden{display:none!important}
+    .login-wrap{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 15% 10%,#e4e8cf 0,transparent 30%),var(--cream)}.login-card{width:min(420px,100%);padding:32px;background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow)}.brand{display:flex;align-items:center;gap:11px;font-weight:800;font-size:17px}.brand-mark{display:grid;place-items:center;width:38px;height:38px;border-radius:50% 50% 50% 8px;background:var(--orange);color:#fff;font-family:Georgia,serif;font-size:21px}.login-card h1{font:700 30px/1.1 Georgia,serif;letter-spacing:-.04em;margin:28px 0 8px}.muted{color:var(--muted)}.login-card p{margin:0 0 22px}.field{display:grid;gap:6px;margin:14px 0}.field label{font-size:12px;font-weight:700;color:var(--muted)}.field input,.field select{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}.field input:focus,.field select:focus{outline:2px solid #2c624d40;border-color:var(--green)}
+    .button{border:0;border-radius:10px;padding:11px 15px;background:var(--green);color:#fff;font-weight:700}.button:hover{filter:brightness(1.06)}.button:disabled{opacity:.55;cursor:wait}.button.full{width:100%;margin-top:8px}.button.secondary{background:#edf0e7;color:var(--ink)}.button.small{padding:8px 11px;font-size:12px}.button.danger{background:#fff0ec;color:var(--red)}.error-msg{min-height:20px;margin-top:12px;color:var(--red);font-size:13px}
+    .topbar{height:70px;padding:0 max(24px,calc((100vw - 1440px)/2));display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:4}.topbar .brand-mark{width:34px;height:34px;font-size:18px}.top-actions{display:flex;align-items:center;gap:12px}.top-actions span{font-size:12px;color:var(--muted)}
+    .layout{max-width:1440px;margin:auto;padding:28px 24px 60px}.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:22px}.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.13em;font-weight:800;color:var(--orange)}h1,h2,h3,p{margin-top:0}.page-head h1{font:700 clamp(28px,4vw,38px)/1.1 Georgia,serif;letter-spacing:-.04em;margin:6px 0}.page-head p{margin:0;color:var(--muted)}.refresh{white-space:nowrap}
+    .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:22px 0}.stat{padding:16px 18px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 20px #17352c08}.stat span{display:block;color:var(--muted);font-size:12px}.stat strong{display:block;font-size:27px;line-height:1.2;margin-top:7px;letter-spacing:-.04em}.stat.active strong{color:var(--green)}.stat.overdue strong{color:var(--red)}
+    .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin:26px 0 18px}.tab{border:0;background:transparent;padding:12px 16px;color:var(--muted);font-weight:700;border-bottom:2px solid transparent}.tab[aria-selected=true]{color:var(--green);border-color:var(--green)}.panel{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 6px 20px #17352c08;overflow:hidden}.panel-head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}.panel-head h2{font-size:17px;margin:0}.tools{display:flex;gap:8px;flex-wrap:wrap}.tools input,.tools select{padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:white;min-width:165px}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;min-width:850px}th,td{text-align:left;vertical-align:top;padding:13px 16px;border-bottom:1px solid #edf0eb}th{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);background:#fbfcfa;position:sticky;top:0}tbody tr:last-child td{border-bottom:0}.primary{font-weight:750}.secondary-text{font-size:12px;color:var(--muted);margin-top:3px}.badge{display:inline-flex;align-items:center;border-radius:99px;padding:4px 9px;font-size:11px;font-weight:800;white-space:nowrap}.badge.paid{background:#e0eddf;color:#28603f}.badge.trial{background:#fff2cf;color:var(--gold)}.badge.late{background:#fce6e1;color:var(--red)}.badge.neutral{background:#edf0ed;color:#59645c}.empty{padding:34px 18px;text-align:center;color:var(--muted)}.table-foot{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}.page-buttons{display:flex;gap:8px}
+    .order-list{display:grid;gap:12px;padding:16px}.order-card{border:1px solid var(--line);border-radius:13px;padding:16px;background:#fff}.order-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.order-top h3{font-size:14px;margin:0}.order-grid{display:grid;grid-template-columns:minmax(190px,1.1fr) minmax(220px,1.5fr) minmax(160px,1fr);gap:14px;margin-top:12px}.order-block{font-size:12px;min-width:0}.order-block strong{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:block;margin-bottom:4px}.order-block a{color:var(--green);font-weight:700}.items-list{margin:0;padding-left:17px}.items-list li{margin:2px 0}.order-controls{display:flex;align-items:center;gap:9px;margin-top:14px;padding-top:12px;border-top:1px solid #edf0eb}.order-controls label{font-size:11px;color:var(--muted);font-weight:700}.order-controls select{padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff}.order-total{margin-left:auto;font-size:16px;font-weight:800}.toast{position:fixed;right:22px;bottom:22px;z-index:10;background:var(--ink);color:#fff;padding:12px 16px;border-radius:11px;box-shadow:var(--shadow);max-width:min(420px,calc(100vw - 44px))}.toast.bad{background:var(--red)}
+    dialog{width:min(480px,calc(100vw - 28px));border:1px solid var(--line);border-radius:18px;padding:0;box-shadow:0 30px 90px #10271f45}dialog::backdrop{background:#12231d77}.dialog-body{padding:24px}.dialog-body h2{font:700 24px Georgia,serif;margin-bottom:5px}.dialog-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}.help{font-size:12px;color:var(--muted);line-height:1.5}.no-results{padding:28px;text-align:center;color:var(--muted)}
+    @media(max-width:950px){.stats{grid-template-columns:repeat(3,1fr)}.order-grid{grid-template-columns:1fr 1fr}.order-block.items{grid-column:1/-1}}@media(max-width:640px){.topbar{padding:0 14px}.topbar .top-actions span{display:none}.layout{padding:20px 12px 40px}.page-head{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:repeat(2,1fr);gap:8px}.stat{padding:13px}.stat strong{font-size:23px}.tabs{margin-top:20px}.tab{padding:11px 10px;font-size:12px}.panel-head{padding:14px}.tools{width:100%}.tools input,.tools select{flex:1;min-width:0}.order-grid{grid-template-columns:1fr}.order-block.items{grid-column:auto}.order-top{flex-direction:column}.order-controls{flex-wrap:wrap}.order-total{margin-left:0}.table-foot{gap:8px;flex-wrap:wrap}.login-card{padding:24px}}
+  </style>
+</head>
+<body>
+  <section id="login-screen" class="login-wrap">
+    <form id="login-form" class="login-card">
+      <div class="brand"><span class="brand-mark">M</span><span>microfoodbr <span class="muted">/ admin</span></span></div>
+      <h1>Seu painel de controle.</h1>
+      <p class="muted">Acompanhe assinaturas, pagamentos e pedidos em um só lugar.</p>
+      <div class="field"><label for="password">Senha administrativa</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256" placeholder="Digite o segredo ADMIN_TOKEN"></div>
+      <button class="button full" type="submit">Entrar no painel</button>
+      <div id="login-error" class="error-msg" role="alert"></div>
+      <p class="help">A sessão expira após 8 horas. Nunca compartilhe sua senha administrativa.</p>
+    </form>
+  </section>
+
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">M</span><span>microfoodbr <span class="muted">/ painel</span></span></div>
+      <div class="top-actions"><span>Área administrativa protegida</span><button id="logout" class="button secondary small" type="button">Sair</button></div>
+    </header>
+    <main class="layout">
+      <div class="page-head"><div><div class="eyebrow">Operação da plataforma</div><h1>Visão geral</h1><p>Assinaturas e pedidos registrados no banco.</p></div><button id="refresh" class="button secondary refresh" type="button">Atualizar dados</button></div>
+      <section class="stats" aria-label="Resumo">
+        <div class="stat"><span>Comerciantes</span><strong id="stat-merchants">—</strong></div>
+        <div class="stat active"><span>Assinaturas em dia</span><strong id="stat-paid">—</strong></div>
+        <div class="stat"><span>Em período de teste</span><strong id="stat-trial">—</strong></div>
+        <div class="stat overdue"><span>Atrasadas / vencidas</span><strong id="stat-overdue">—</strong></div>
+        <div class="stat"><span>Pedidos em aberto</span><strong id="stat-open-orders">—</strong></div>
+      </section>
+      <div class="tabs" role="tablist" aria-label="Seções do painel">
+        <button class="tab" id="tab-merchants" role="tab" aria-selected="true" aria-controls="merchants-panel">Assinaturas</button>
+        <button class="tab" id="tab-orders" role="tab" aria-selected="false" aria-controls="orders-panel">Pedidos e compradores</button>
+      </div>
+      <section id="merchants-panel" class="panel" role="tabpanel" aria-labelledby="tab-merchants">
+        <div class="panel-head"><h2>Comerciantes e pagamentos</h2><div class="tools"><input id="merchant-search" type="search" placeholder="Buscar nome ou e-mail" aria-label="Buscar comerciante"><select id="merchant-filter" aria-label="Filtrar situação"><option value="all">Todas as situações</option><option value="paid">Em dia</option><option value="trial">Em teste</option><option value="late">Atrasadas / vencidas</option></select></div></div>
+        <div class="table-scroll"><table><thead><tr><th>Comerciante</th><th>Contato</th><th>Plano / situação</th><th>Válido até</th><th>Último pagamento</th><th>Ação</th></tr></thead><tbody id="merchant-rows"></tbody></table></div>
+        <div id="merchant-empty" class="empty hidden">Nenhum comerciante encontrado.</div>
+        <div class="table-foot"><span id="merchant-count"></span><span>Confirme o recebimento fora do painel antes de registrar como pago.</span></div>
+      </section>
+      <section id="orders-panel" class="panel hidden" role="tabpanel" aria-labelledby="tab-orders">
+        <div class="panel-head"><h2>Pedidos e contatos dos compradores</h2><div class="tools"><input id="order-search" type="search" placeholder="Nome, telefone, endereço ou loja" aria-label="Buscar pedido ou comprador"><select id="order-filter" aria-label="Filtrar status do pedido"><option value="">Todos os pedidos</option><option value="pending">Pendente</option><option value="confirmed">Confirmado</option><option value="preparing">Preparando</option><option value="ready">Pronto</option><option value="delivered">Entregue</option><option value="cancelled">Cancelado</option></select></div></div>
+        <div id="orders-list" class="order-list"></div>
+        <div id="orders-empty" class="empty hidden">Nenhum pedido encontrado.</div>
+        <div class="table-foot"><span id="orders-count"></span><div class="page-buttons"><button id="orders-prev" class="button secondary small" type="button">Anterior</button><button id="orders-next" class="button secondary small" type="button">Próxima</button></div></div>
+      </section>
+      <p class="help" style="margin:14px 4px 0">Privacidade: os dados pessoais de compradores só são carregados nesta área após autenticação. Os pagamentos aparecem como confirmados apenas quando você os registra manualmente; esta versão ainda não recebe confirmação automática do Mercado Pago.</p>
+    </main>
+  </div>
+
+  <dialog id="payment-dialog">
+    <form id="payment-form" class="dialog-body">
+      <h2>Registrar pagamento</h2>
+      <p id="payment-merchant" class="muted"></p>
+      <p class="help">Use somente depois de verificar que o pagamento foi recebido. O registro ficará identificado como manual.</p>
+      <input id="payment-merchant-id" type="hidden">
+      <div class="field"><label for="payment-amount">Valor recebido (R$)</label><input id="payment-amount" type="number" min="0.01" step="0.01" required></div>
+      <div class="field"><label for="payment-until">Assinatura válida até</label><input id="payment-until" type="date" required></div>
+      <div class="field"><label for="payment-reference">Referência/comprovante (opcional)</label><input id="payment-reference" maxlength="120" placeholder="Ex.: ID da transação"></div>
+      <div class="field"><label for="payment-note">Observação (opcional)</label><input id="payment-note" maxlength="500" placeholder="Anotação interna"></div>
+      <div class="dialog-actions"><button id="payment-cancel" class="button secondary" type="button">Cancelar</button><button class="button" type="submit">Confirmar registro</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script>
+    const $ = (selector) => document.querySelector(selector)
+    const loginScreen = $('#login-screen'), app = $('#app'), loginError = $('#login-error')
+    const state = { merchants: [], orders: [], orderOffset: 0, orderTotal: 0, orderLimit: 25, toastTimer: 0 }
+    const STATUS_LABELS = { pending: 'Pendente', confirmed: 'Confirmado', preparing: 'Preparando', ready: 'Pronto', delivered: 'Entregue', cancelled: 'Cancelado' }
+    const money = (cents) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((Number(cents) || 0) / 100)
+    const dateLabel = (value) => {
+      if (!value) return '—'
+      const d = new Date(value.length === 10 ? `${value}T12:00:00Z` : value)
+      return Number.isNaN(d.getTime()) ? String(value) : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(d)
+    }
+    const dateTimeLabel = (value) => {
+      if (!value) return '—'
+      const d = new Date(value)
+      return Number.isNaN(d.getTime()) ? String(value) : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(d)
+    }
+    async function api(path, options = {}) {
+      const response = await fetch(path, { credentials: 'same-origin', ...options, headers: { ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.headers || {}) } })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || `Falha na solicitação (${response.status})`)
+      return data
+    }
+    function showToast(message, bad = false) {
+      const toast = $('#toast'); toast.textContent = message; toast.classList.toggle('bad', bad); toast.classList.remove('hidden')
+      clearTimeout(state.toastTimer); state.toastTimer = setTimeout(() => toast.classList.add('hidden'), 3800)
+    }
+    function showLogin(message = '') {
+      app.classList.add('hidden'); loginScreen.classList.remove('hidden'); loginError.textContent = message
+      $('#password').focus()
+    }
+    function showApp() { loginScreen.classList.add('hidden'); app.classList.remove('hidden') }
+    function merchantStatus(merchant) {
+      const status = merchant.subscription_status || ''
+      const until = merchant.paid_until || merchant.subscription_trial_ends_at || merchant.trial_ends_at || ''
+      const today = new Date().toISOString().slice(0, 10)
+      if (status === 'cancelled' || merchant.status === 'cancelled' || merchant.status === 'suspended') return { key: 'late', label: 'Cancelada / suspensa', until }
+      if (status === 'trial' && until.slice(0, 10) >= today) return { key: 'trial', label: 'Em teste', until }
+      if (status === 'active' && merchant.paid_until && merchant.paid_until.slice(0, 10) >= today) return { key: 'paid', label: 'Em dia', until }
+      if (status === 'past_due' || (until && until.slice(0, 10) < today)) return { key: 'late', label: 'Atrasada / vencida', until }
+      if (status === 'active' && !merchant.paid_until) return { key: 'late', label: 'Verificar pagamento', until }
+      return { key: 'late', label: status ? 'Verificar situação' : 'Sem assinatura', until }
+    }
+    function badge(label, key) { const span = document.createElement('span'); span.className = `badge ${key}`; span.textContent = label; return span }
+    function addText(parent, tag, text, className = '') { const el = document.createElement(tag); el.textContent = text == null || text === '' ? '—' : String(text); if (className) el.className = className; parent.append(el); return el }
+    function renderMerchants() {
+      const tbody = $('#merchant-rows'); tbody.replaceChildren()
+      const q = $('#merchant-search').value.trim().toLowerCase(), filter = $('#merchant-filter').value
+      const list = state.merchants.filter((m) => {
+        const status = merchantStatus(m)
+        const matches = !q || `${m.business_name || ''} ${m.owner_name || ''} ${m.email || ''} ${m.phone || ''}`.toLowerCase().includes(q)
+        return matches && (filter === 'all' || status.key === filter)
+      })
+      $('#merchant-empty').classList.toggle('hidden', list.length > 0)
+      for (const m of list) {
+        const tr = document.createElement('tr'), identity = document.createElement('td')
+        addText(identity, 'div', m.business_name, 'primary'); addText(identity, 'div', `Responsável: ${m.owner_name || '—'}`, 'secondary-text'); tr.append(identity)
+        const contact = document.createElement('td'); addText(contact, 'div', m.email); addText(contact, 'div', m.phone || 'Telefone não informado', 'secondary-text'); tr.append(contact)
+        const plan = document.createElement('td'); addText(plan, 'div', m.plan === 'monthly' ? 'Mensal' : 'Avaliação', 'secondary-text'); plan.append(badge(merchantStatus(m).label, merchantStatus(m).key)); addText(plan, 'div', `Valor: ${money(m.amount_cents)}`, 'secondary-text'); tr.append(plan)
+        const valid = document.createElement('td'); addText(valid, 'div', dateLabel(merchantStatus(m).until)); addText(valid, 'div', m.city && m.state ? `${m.city}/${m.state}` : 'Local não informado', 'secondary-text'); tr.append(valid)
+        const payment = document.createElement('td'); addText(payment, 'div', m.last_payment_status === 'paid' ? money(m.last_payment_cents) : (m.last_payment_status || 'Sem registro')); addText(payment, 'div', dateTimeLabel(m.last_payment_at), 'secondary-text'); tr.append(payment)
+        const action = document.createElement('td'), button = document.createElement('button'); button.type = 'button'; button.className = 'button small'; button.textContent = 'Registrar pagamento'; button.addEventListener('click', () => openPayment(m)); action.append(button); tr.append(action)
+        tbody.append(tr)
+      }
+      $('#merchant-count').textContent = `${list.length} de ${state.merchants.length} comerciante(s)`
+    }
+    function buildOrderCard(order) {
+      const card = document.createElement('article'); card.className = 'order-card'
+      const top = document.createElement('div'); top.className = 'order-top'
+      const heading = document.createElement('div'); addText(heading, 'h3', `Pedido #${order.id} · ${order.business_name}`); addText(heading, 'div', dateTimeLabel(order.created_at), 'secondary-text'); top.append(heading)
+      const statusBadge = badge(STATUS_LABELS[order.status] || order.status, order.status === 'delivered' ? 'paid' : order.status === 'cancelled' ? 'late' : 'neutral'); top.append(statusBadge); card.append(top)
+      const grid = document.createElement('div'); grid.className = 'order-grid'
+      const contact = document.createElement('div'); contact.className = 'order-block'; addText(contact, 'strong', 'Comprador'); addText(contact, 'div', order.customer_name, 'primary')
+      const digits = String(order.customer_phone || '').replace(/\D/g, '')
+      if (digits) { const links = document.createElement('div'); links.className = 'secondary-text'; const tel = document.createElement('a'); tel.href = `tel:${digits}`; tel.textContent = order.customer_phone; links.append(tel); const wa = document.createElement('a'); wa.href = `https://wa.me/${digits}`; wa.target = '_blank'; wa.rel = 'noopener noreferrer'; wa.textContent = ' · WhatsApp'; links.append(wa); contact.append(links) }
+      grid.append(contact)
+      const address = document.createElement('div'); address.className = 'order-block'; addText(address, 'strong', 'Endereço de entrega'); addText(address, 'div', order.delivery_address || 'Não informado')
+      if (order.notes) addText(address, 'div', `Obs.: ${order.notes}`, 'secondary-text')
+      grid.append(address)
+      const itemBlock = document.createElement('div'); itemBlock.className = 'order-block items'; addText(itemBlock, 'strong', 'Itens')
+      const ul = document.createElement('ul'); ul.className = 'items-list'
+      for (const item of order.items || []) { const li = document.createElement('li'); li.textContent = `${item.quantity}× ${item.item_name} · ${money(item.subtotal_cents)}`; ul.append(li) }
+      if (!(order.items || []).length) { const li = document.createElement('li'); li.textContent = 'Detalhes não disponíveis'; ul.append(li) }
+      itemBlock.append(ul); grid.append(itemBlock); card.append(grid)
+      const controls = document.createElement('div'); controls.className = 'order-controls'; const label = document.createElement('label'); label.textContent = 'Atualizar status'; label.htmlFor = `order-status-${order.id}`; controls.append(label)
+      const select = document.createElement('select'); select.id = `order-status-${order.id}`
+      for (const [value, text] of Object.entries(STATUS_LABELS)) { const option = document.createElement('option'); option.value = value; option.textContent = text; option.selected = value === order.status; select.append(option) }
+      select.addEventListener('change', async () => {
+        select.disabled = true
+        try { await api(`/api/admin/orders/${order.id}`, { method: 'PATCH', body: JSON.stringify({ status: select.value }) }); order.status = select.value; statusBadge.textContent = STATUS_LABELS[order.status]; statusBadge.className = `badge ${order.status === 'delivered' ? 'paid' : order.status === 'cancelled' ? 'late' : 'neutral'}`; showToast('Status do pedido atualizado.'); await loadSummary() }
+        catch (err) { select.value = order.status; showToast(err.message, true) }
+        finally { select.disabled = false }
+      })
+      controls.append(select); const total = document.createElement('span'); total.className = 'order-total'; total.textContent = money(order.total_cents); controls.append(total); card.append(controls)
+      return card
+    }
+    async function loadSummary() {
+      const s = await api('/api/admin/summary')
+      $('#stat-merchants').textContent = s.totalMerchants
+      $('#stat-paid').textContent = s.paidUp
+      $('#stat-trial').textContent = s.trials
+      $('#stat-overdue').textContent = s.overdue
+      $('#stat-open-orders').textContent = s.openOrders
+    }
+    async function loadMerchants() { const data = await api('/api/admin/merchants'); state.merchants = data.merchants || []; renderMerchants() }
+    async function loadOrders() {
+      const params = new URLSearchParams({ limit: String(state.orderLimit), offset: String(state.orderOffset) })
+      const q = $('#order-search').value.trim(), status = $('#order-filter').value
+      if (q) params.set('q', q); if (status) params.set('status', status)
+      const data = await api(`/api/admin/orders?${params}`); state.orders = data.orders || []; state.orderTotal = data.total || 0
+      const list = $('#orders-list'); list.replaceChildren(); for (const order of state.orders) list.append(buildOrderCard(order))
+      $('#orders-empty').classList.toggle('hidden', state.orders.length > 0)
+      const first = state.orderTotal ? state.orderOffset + 1 : 0, last = Math.min(state.orderOffset + state.orders.length, state.orderTotal)
+      $('#orders-count').textContent = `${first}–${last} de ${state.orderTotal} pedido(s)`
+      $('#orders-prev').disabled = state.orderOffset <= 0; $('#orders-next').disabled = state.orderOffset + state.orderLimit >= state.orderTotal
+    }
+    async function refreshAll() {
+      $('#refresh').disabled = true
+      try { await Promise.all([loadSummary(), loadMerchants(), loadOrders()]) }
+      catch (err) { if (err.message === 'Não autorizado') showLogin('Sua sessão expirou. Entre novamente.'); else showToast(err.message, true) }
+      finally { $('#refresh').disabled = false }
+    }
+    function openPayment(merchant) {
+      $('#payment-merchant-id').value = merchant.id
+      $('#payment-merchant').textContent = `${merchant.business_name} · ${merchant.email}`
+      $('#payment-amount').value = ((Number(merchant.amount_cents) || 4700) / 100).toFixed(2)
+      const next = new Date(); const day = next.getUTCDate(); next.setUTCDate(1); next.setUTCMonth(next.getUTCMonth() + 1); const last = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate(); next.setUTCDate(Math.min(day, last));
+      $('#payment-until').value = next.toISOString().slice(0, 10)
+      $('#payment-reference').value = ''; $('#payment-note').value = ''
+      $('#payment-dialog').showModal()
+    }
+    $('#login-form').addEventListener('submit', async (event) => {
+      event.preventDefault(); const button = event.currentTarget.querySelector('button'); button.disabled = true; loginError.textContent = ''
+      try { await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ password: $('#password').value }) }); $('#password').value = ''; showApp(); await refreshAll() }
+      catch (err) { loginError.textContent = err.message }
+      finally { button.disabled = false }
+    })
+    $('#logout').addEventListener('click', async () => { try { await api('/api/admin/logout', { method: 'POST', body: '{}' }) } catch {} showLogin('Você saiu do painel.') })
+    $('#refresh').addEventListener('click', refreshAll)
+    $('#merchant-search').addEventListener('input', renderMerchants); $('#merchant-filter').addEventListener('change', renderMerchants)
+    $('#tab-merchants').addEventListener('click', () => { $('#tab-merchants').setAttribute('aria-selected', 'true'); $('#tab-orders').setAttribute('aria-selected', 'false'); $('#merchants-panel').classList.remove('hidden'); $('#orders-panel').classList.add('hidden') })
+    $('#tab-orders').addEventListener('click', () => { $('#tab-merchants').setAttribute('aria-selected', 'false'); $('#tab-orders').setAttribute('aria-selected', 'true'); $('#merchants-panel').classList.add('hidden'); $('#orders-panel').classList.remove('hidden') })
+    let searchTimer = 0
+    function queueOrderSearch() { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.orderOffset = 0; loadOrders().catch((err) => showToast(err.message, true)) }, 250) }
+    $('#order-search').addEventListener('input', queueOrderSearch); $('#order-filter').addEventListener('change', () => { state.orderOffset = 0; loadOrders().catch((err) => showToast(err.message, true)) })
+    $('#orders-prev').addEventListener('click', () => { state.orderOffset = Math.max(0, state.orderOffset - state.orderLimit); loadOrders().catch((err) => showToast(err.message, true)) })
+    $('#orders-next').addEventListener('click', () => { state.orderOffset += state.orderLimit; loadOrders().catch((err) => showToast(err.message, true)) })
+    $('#payment-cancel').addEventListener('click', () => $('#payment-dialog').close())
+    $('#payment-form').addEventListener('submit', async (event) => {
+      event.preventDefault()
+      const ok = window.confirm('Confirma que verificou o recebimento deste pagamento? O registro será gravado como pagamento manual.')
+      if (!ok) return
+      const submit = event.currentTarget.querySelector('button[type="submit"]'); submit.disabled = true
+      try {
+        const merchantId = $('#payment-merchant-id').value
+        const amountCents = Math.round(Number($('#payment-amount').value) * 100)
+        await api(`/api/admin/merchants/${merchantId}/payments`, { method: 'POST', body: JSON.stringify({ amountCents, paidUntil: $('#payment-until').value, reference: $('#payment-reference').value, note: $('#payment-note').value }) })
+        $('#payment-dialog').close(); showToast('Pagamento manual registrado.'); await Promise.all([loadSummary(), loadMerchants()])
+      } catch (err) { showToast(err.message, true) }
+      finally { submit.disabled = false }
+    })
+    api('/api/admin/session').then(async () => { showApp(); await refreshAll() }).catch(() => showLogin())
+  </script>
+</body>
+</html>
