@@ -82,7 +82,7 @@
   </section>
   <section class="section" id="cadastro" aria-labelledby="cadastro-title"><div class="section-head"><h2 id="cadastro-title">Cadastre seu negócio.</h2><p>Comece com 7 dias grátis.</p></div><form id="merchant-form" class="card" style="display:grid;gap:12px;max-width:720px"><label>Nome do negócio<input name="businessName" required placeholder="Ex.: Hot Dog do Luis"></label><label>Seu nome<input name="ownerName" required placeholder="Nome completo"></label><label>E-mail<input name="email" type="email" required placeholder="voce@email.com"></label><label>Telefone<input name="phone" placeholder="(00) 00000-0000"></label><div style="display:grid;grid-template-columns:2fr 1fr;gap:12px"><label>Cidade<input name="city" required placeholder="São José do Rio Preto"></label><label>UF<input name="state" required maxlength="2" placeholder="SP"></label></div><input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"><button class="button" type="submit">Criar meu cadastro</button><p id="merchant-message" role="status" style="margin:0;color:var(--muted);font-size:13px"></p></form></section>
   </main>
-  <script>
+    <script>
     const form = document.querySelector('#merchant-form')
     const message = document.querySelector('#merchant-message')
     form?.addEventListener('submit', async (event) => {
@@ -91,18 +91,30 @@
       button.disabled = true
       message.textContent = 'Enviando cadastro...'
       try {
-        const response = await fetch('/api/merchants', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(form))) })
+        const formData = Object.fromEntries(new FormData(form))
+        const response = await fetch('/api/merchants', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(formData) })
         const data = await response.json()
         if (!response.ok) throw new Error(data.error || 'Não foi possível cadastrar')
+        const signup = { merchantId: data.id, email: formData.email }
         form.reset()
-        message.innerHTML = `Cadastro criado. Seus 7 dias grátis começam agora. <a href="https://mpago.la/1vDrXCj" target="_blank" rel="noopener noreferrer">Assinar por R$ 47,00</a>`
+        message.innerHTML = 'Cadastro criado. Seus 7 dias grátis começam agora. <button type="button" id="pay-button" class="button">Assinar por R$ 47,00</button>'
+        document.querySelector('#pay-button').addEventListener('click', async () => {
+          const payButton = document.querySelector('#pay-button')
+          payButton.disabled = true
+          try {
+            const checkout = await fetch('/api/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(signup) })
+            const checkoutData = await checkout.json()
+            if (!checkout.ok || !checkoutData.url) throw new Error(checkoutData.error || 'Pagamento indisponível')
+            window.location.href = checkoutData.url
+          } catch (err) {
+            payButton.disabled = false
+            message.textContent = err.message + '. Tente novamente em instantes ou fale com o suporte.'
+          }
+        })
       } catch (error) { message.textContent = error.message }
       finally { button.disabled = false }
     })
   </script>
-  <footer id="sobre"><div class="shell"><div><span>© 2026 MicroFoodBR. Feito para a vida real.</span><span class="footer-contact">Suporte: <a href="mailto:hdmicro@gmail.com">hdmicro@gmail.com</a> · Responsável: Luis · São José do Rio Preto, SP</span></div><span>Fresco. Simples. Gostoso.</span></div></footer>
-<script>
-(() => {
   const T = {
     'Lanchonete': ['Lanches do Bairro', 'Lanches preparados na hora', [['X-Burger', 'R$ 22,00'], ['Hot Dog da Casa', 'R$ 16,00'], ['Batata crocante', 'R$ 14,00']]],
     'Marmitaria': ['Tempero de Casa', 'Comida caseira feita com cuidado', [['Prato do dia', 'R$ 24,00'], ['Marmita completa', 'R$ 29,00'], ['Suco natural', 'R$ 8,00']]],
@@ -131,7 +143,6 @@
       boxes[key].append(b);
     });
   }
-
   function render() {
     for (const k in boxes) boxes[k].querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === s[k])));
     const [name, tag, items] = T[s.t], [col, txt] = C[s.c], rad = R[s.r];
