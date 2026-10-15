@@ -131,7 +131,7 @@ async function createMerchant(request, env) {
   try { body = await readJson(request) } catch (err) {
     return err.message === 'PAYLOAD_TOO_LARGE' ? error('Cadastro muito grande', 413) : error('JSON inválido')
   }
-  if (cleanString(body?.website, 200)) return error('Não foi possível concluir o cadastro')
+  if (cleanString(body?.website, 200) || cleanString(body?.__hp_mf, 200)) return error('Não foi possível concluir o cadastro')
   const businessName = cleanString(body?.businessName, 120)
   const ownerName = cleanString(body?.ownerName, 120)
   const email = cleanString(body?.email, 254).toLowerCase()
@@ -381,11 +381,6 @@ async function listOrders(request, env) {
   }
 }
 
-
-// ---------------------------------------------------------------------------
-// Mercado Pago: checkout por comerciante + webhook com confirmação automática
-// Segredos usados no Worker: Access_Token (ou MP_ACCESS_TOKEN) e MP_WEBHOOK_SECRET
-// ---------------------------------------------------------------------------
 const MP_API = 'https://api.mercadopago.com'
 const SUBSCRIPTION_DAYS = 30
 
@@ -433,7 +428,6 @@ async function createCheckout(request, env, url) {
     FROM merchants m JOIN subscriptions s ON s.merchant_id = m.id
     WHERE m.id = ?
   `).bind(merchantId).first()
-  // Exige id + e-mail do cadastro: evita que alguém gere cobranças para ids aleatórios.
   if (!row || String(row.email).toLowerCase() !== email) return error('Cadastro não encontrado', 404)
 
   const preference = {
@@ -482,11 +476,10 @@ async function mpWebhook(request, env, url) {
   const paymentId = String(url.searchParams.get('data.id') || body?.data?.id || '').trim()
   if (!/^\d{1,20}$/.test(paymentId)) return error('Pagamento inválido', 422)
 
-  // A fonte da verdade é a API do Mercado Pago, não o corpo recebido.
   const response = await fetch(`${MP_API}/v1/payments/${paymentId}`, { headers: { authorization: `Bearer ${token}` } })
   if (!response.ok) {
     console.error('Falha ao consultar pagamento no Mercado Pago:', paymentId, response.status)
-    return error('Não foi possível consultar o pagamento', 502) // o Mercado Pago tenta de novo
+    return error('Não foi possível consultar o pagamento', 502)
   }
   const payment = await response.json()
   if (payment.status !== 'approved') return json({ ok: true, status: payment.status })
@@ -537,7 +530,7 @@ async function serveAsset(request, env, url, path) {
   headers.set('cache-control', 'no-store')
   headers.set('x-frame-options', 'DENY')
   headers.set('referrer-policy', 'same-origin')
-  headers.set('content-security-policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+  headers.set('content-security-policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none';")
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
