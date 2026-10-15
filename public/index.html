@@ -94,8 +94,21 @@
         const response = await fetch('/api/merchants', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(form))) })
         const data = await response.json()
         if (!response.ok) throw new Error(data.error || 'Não foi possível cadastrar')
+        const signup = { merchantId: data.id, email: form.elements.email.value.trim() }
         form.reset()
-        message.innerHTML = `Cadastro criado. Seus 7 dias grátis começam agora. <a href="https://mpago.la/1vDrXCj" target="_blank" rel="noopener noreferrer">Assinar por R$ 47,00</a>`
+        message.innerHTML = 'Cadastro criado. Seus 7 dias grátis começam agora. <button type="button" id="pay-button" class="button">Assinar por R$ 47,00</button>'
+        document.querySelector('#pay-button').addEventListener('click', async (clickEvent) => {
+          const payButton = clickEvent.currentTarget
+          payButton.disabled = true
+          try {
+            const checkout = await fetch('/api/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(signup) })
+            const checkoutData = await checkout.json()
+            if (!checkout.ok || !checkoutData.url) throw new Error(checkoutData.error || 'Pagamento indisponível')
+            window.location.href = checkoutData.url
+          } catch (checkoutError) {
+            message.textContent = checkoutError.message + '. Tente novamente em instantes ou fale com o suporte.'
+          }
+        })
       } catch (error) { message.textContent = error.message }
       finally { button.disabled = false }
     })
