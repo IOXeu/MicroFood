@@ -1,15 +1,11 @@
-# v0 sandbox internal files
-__v0_runtime_loader.js
-__v0_devtools.tsx
-__v0_jsx-dev-runtime.ts
-.snowflake/
-.v0-trash/
-.vercel/
-
-# Environment variables
-.env*.local
-
-# Common ignores
+# Dependências
 node_modules
-.next/
+
+# Cloudflare / Wrangler
+.wrangler/
+.dev.vars
+.env
+.env.*
+
+# Sistema
 .DS_Store

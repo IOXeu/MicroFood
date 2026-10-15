@@ -1,0 +1,127 @@
+From 2e2816ce0fd6bda0edb5ffa9d472cfd58ffd0293 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 15 Oct 2026 11:37:34 +0000
+Subject: [PATCH] Limpeza: remove api/menu.js obsoleto (Vercel/pg), corrige
+ scripts D1, .gitignore e README
+
+---
+ .gitignore   | 22 +++++++++-------------
+ README.md    | 18 +++++++++++++++++-
+ api/menu.js  | 26 --------------------------
+ package.json |  4 ++--
+ 4 files changed, 28 insertions(+), 42 deletions(-)
+ delete mode 100644 api/menu.js
+
+diff --git a/.gitignore b/.gitignore
+index 97eb8c0..0711ec5 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,15 +1,11 @@
+-# v0 sandbox internal files
+-__v0_runtime_loader.js
+-__v0_devtools.tsx
+-__v0_jsx-dev-runtime.ts
+-.snowflake/
+-.v0-trash/
+-.vercel/
++# Dependências
++node_modules
+ 
+-# Environment variables
+-.env*.local
++# Cloudflare / Wrangler
++.wrangler/
++.dev.vars
++.env
++.env.*
+ 
+-# Common ignores
+-node_modules
+-.next/
+-.DS_Store
+\ No newline at end of file
++# Sistema
++.DS_Store
+diff --git a/README.md b/README.md
+index 29726dc..d3154d0 100644
+--- a/README.md
++++ b/README.md
+@@ -2,6 +2,22 @@
+ 
+ Este pacote publica a aplicação como **Cloudflare Worker**, servindo o site e o painel em `/admin`, e implementando a API em `worker.js`.
+ 
++## Estrutura do repositório
++
++```
++.
++├── index.html            # Site do projeto Cloudflare Pages (microfoodbr.pages.dev)
++├── functions/api/        # API do Pages (menu, merchants, orders)
++├── public/               # Site + painel /admin servidos pelo Worker
++│   ├── index.html
++│   └── admin.html
++├── worker.js             # API completa do Worker (D1 + painel admin)
++├── wrangler.jsonc        # Config do Worker (binding DB -> D1 microfoodbr)
++└── schema.sql            # Schema do banco (já aplicado; não reaplicar)
++```
++
++Há **dois caminhos de publicação independentes**: o Pages usa `index.html` + `functions/` da raiz; o Worker usa `public/` + `worker.js`.
++
+ ## Recursos Cloudflare configurados
+ 
+ - **Worker:** `microfoodbr`.
+@@ -55,4 +71,4 @@ Para produção, considere também habilitar proteção contra abuso/rate limiti
+ 
+ ## Publicação automatizada pelo GitHub
+ 
+-No serviço Cloudflare Worker `microfoodbr`, configure a raiz de compilação como `cloudflare-worker` e o comando de deploy como `npm run deploy`. Isso mantém o projeto Pages existente na raiz do repositório separado. Configure `ADMIN_TOKEN` nos secrets do **Worker** (não nos de Pages). O banco D1 `microfoodbr` já está vinculado no `wrangler.jsonc`; não aplique o schema ao banco remoto.
++No serviço Cloudflare Worker `microfoodbr`, deixe a raiz de compilação na raiz do repositório (`/`) e use o comando de deploy `npm run deploy`. O projeto Pages homônimo continua separado e não é alterado. Configure `ADMIN_TOKEN` nos secrets do **Worker** (não nos de Pages). O banco D1 `microfoodbr` já está vinculado no `wrangler.jsonc`; não aplique o schema ao banco remoto.
+diff --git a/api/menu.js b/api/menu.js
+deleted file mode 100644
+index 303c991..0000000
+--- a/api/menu.js
++++ /dev/null
+@@ -1,26 +0,0 @@
+-import { Pool } from 'pg'
+-
+-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+-
+-export default async function handler(req, res) {
+-  try {
+-    if (req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido' })
+-    const { rows } = await pool.query('SELECT id, name, description, price_cents, image_url FROM menu_items WHERE available = TRUE ORDER BY id')
+-    return res.status(200).json(rows)
+-  } catch (error) {
+-    console.error('[v0] menu query failed', error)
+-    return res.status(500).json({ error: 'Não foi possível carregar o cardápio' })
+-  }
+-}
+-
+-export const config = { api: { responseLimit: '1mb' } }
+-
+-if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+-  const seed = async () => {
+-    const { rowCount } = await pool.query('SELECT 1 FROM menu_items LIMIT 1')
+-    if (!rowCount) await pool.query("INSERT INTO menu_items (name, description, price_cents, image_url) VALUES ('Bowl Mediterrâneo', 'Grãos, vegetais assados, folhas e molho cítrico.', 2890, '/food-bowl.png'), ('Bowl Verde', 'Folhas, abacate, grão-de-bico e sementes tostadas.', 2590, '/food-bowl.png'), ('Bowl Proteico', 'Arroz integral, legumes e proteína grelhada.', 3190, '/food-bowl.png')")
+-  }
+-  seed().catch((error) => console.error('[v0] menu seed failed', error))
+-}
+-
+-export { pool }
+diff --git a/package.json b/package.json
+index 2865043..b686314 100644
+--- a/package.json
++++ b/package.json
+@@ -5,8 +5,8 @@
+   "scripts": {
+     "dev": "wrangler dev",
+     "deploy": "wrangler deploy",
+-    "db:init:local": "wrangler d1 execute microfood --local --file=./schema.sql",
+-    "db:init:remote": "wrangler d1 execute microfood --remote --file=./schema.sql"
++    "db:init:local": "wrangler d1 execute microfoodbr --local --file=./schema.sql",
++    "db:init:remote": "wrangler d1 execute microfoodbr --remote --file=./schema.sql"
+   },
+   "devDependencies": {
+     "wrangler": "^4.151.0"
+-- 
+2.43.0
+

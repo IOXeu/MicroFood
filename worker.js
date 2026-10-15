@@ -381,6 +381,149 @@ async function listOrders(request, env) {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// Mercado Pago: checkout por comerciante + webhook com confirmação automática
+// Segredos usados no Worker: Access_Token (ou MP_ACCESS_TOKEN) e MP_WEBHOOK_SECRET
+// ---------------------------------------------------------------------------
+const MP_API = 'https://api.mercadopago.com'
+const SUBSCRIPTION_DAYS = 30
+
+function mpToken(env) {
+  return env.Access_Token || env.MP_ACCESS_TOKEN || ''
+}
+
+function hex(bytes) {
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function validMpSignature(request, url, secret) {
+  const header = request.headers.get('x-signature') || ''
+  const parts = Object.fromEntries(header.split(',').map((part) => {
+    const index = part.indexOf('=')
+    return index < 0 ? ['', ''] : [part.slice(0, index).trim(), part.slice(index + 1).trim()]
+  }))
+  const ts = parts.ts
+  const v1 = parts.v1
+  if (!ts || !v1) return false
+  const requestId = request.headers.get('x-request-id') || ''
+  let dataId = url.searchParams.get('data.id') || ''
+  if (/^[A-Za-z0-9]+$/.test(dataId)) dataId = dataId.toLowerCase()
+  let manifest = ''
+  if (dataId) manifest += `id:${dataId};`
+  if (requestId) manifest += `request-id:${requestId};`
+  manifest += `ts:${ts};`
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const expected = hex(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(manifest)))
+  return secureEqual(expected, v1.toLowerCase())
+}
+
+async function createCheckout(request, env, url) {
+  if (!sameOrigin(request)) return error('Origem não autorizada', 403)
+  const token = mpToken(env)
+  if (!token) return error('Pagamento online ainda não está configurado', 503)
+  let body
+  try { body = await readJson(request, 4_096) } catch { return error('JSON inválido') }
+  const merchantId = Number(body?.merchantId)
+  const email = cleanString(body?.email, 160).toLowerCase()
+  if (!Number.isSafeInteger(merchantId) || merchantId < 1 || !email) return error('Dados inválidos', 422)
+
+  const row = await env.DB.prepare(`
+    SELECT m.id, m.business_name, m.email, s.amount_cents
+    FROM merchants m JOIN subscriptions s ON s.merchant_id = m.id
+    WHERE m.id = ?
+  `).bind(merchantId).first()
+  // Exige id + e-mail do cadastro: evita que alguém gere cobranças para ids aleatórios.
+  if (!row || String(row.email).toLowerCase() !== email) return error('Cadastro não encontrado', 404)
+
+  const preference = {
+    items: [{
+      id: `assinatura-${row.id}`,
+      title: 'Assinatura MicroFoodBR (30 dias)',
+      quantity: 1,
+      currency_id: 'BRL',
+      unit_price: Number(row.amount_cents) / 100,
+    }],
+    payer: { email: row.email },
+    external_reference: String(row.id),
+    notification_url: `${url.origin}/api/mp/webhook`,
+    back_urls: { success: url.origin, pending: url.origin, failure: url.origin },
+    statement_descriptor: 'MICROFOODBR',
+  }
+  const response = await fetch(`${MP_API}/checkout/preferences`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify(preference),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || !data.init_point) {
+    console.error('Mercado Pago recusou a criação do checkout:', response.status, JSON.stringify(data).slice(0, 500))
+    return error('Não foi possível iniciar o pagamento agora', 502)
+  }
+  return json({ url: data.init_point })
+}
+
+function addDays(isoDate, days) {
+  const date = new Date(`${isoDate}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+async function mpWebhook(request, env, url) {
+  const secret = env.MP_WEBHOOK_SECRET
+  const token = mpToken(env)
+  if (!secret || !token) return error('Webhook não configurado', 503)
+  if (!await validMpSignature(request, url, secret)) return error('Assinatura inválida', 401)
+
+  let body = {}
+  try { body = await readJson(request, 16_384) } catch { /* o id também vem na query */ }
+  const type = url.searchParams.get('type') || url.searchParams.get('topic') || body?.type || body?.topic
+  if (type !== 'payment') return json({ ok: true, ignored: type || 'sem tipo' })
+  const paymentId = String(url.searchParams.get('data.id') || body?.data?.id || '').trim()
+  if (!/^\d{1,20}$/.test(paymentId)) return error('Pagamento inválido', 422)
+
+  // A fonte da verdade é a API do Mercado Pago, não o corpo recebido.
+  const response = await fetch(`${MP_API}/v1/payments/${paymentId}`, { headers: { authorization: `Bearer ${token}` } })
+  if (!response.ok) {
+    console.error('Falha ao consultar pagamento no Mercado Pago:', paymentId, response.status)
+    return error('Não foi possível consultar o pagamento', 502) // o Mercado Pago tenta de novo
+  }
+  const payment = await response.json()
+  if (payment.status !== 'approved') return json({ ok: true, status: payment.status })
+
+  const merchantId = Number(payment.external_reference)
+  if (!Number.isSafeInteger(merchantId) || merchantId < 1) return json({ ok: true, ignored: 'sem referência de comerciante' })
+  if (payment.currency_id !== 'BRL') return json({ ok: true, ignored: 'moeda diferente de BRL' })
+
+  const subscription = await env.DB.prepare('SELECT amount_cents, paid_until FROM subscriptions WHERE merchant_id = ?').bind(merchantId).first()
+  if (!subscription) return json({ ok: true, ignored: 'assinatura não encontrada' })
+  const amountCents = Math.round(Number(payment.transaction_amount) * 100)
+  if (!Number.isSafeInteger(amountCents) || amountCents < Number(subscription.amount_cents)) {
+    console.error('Valor pago menor que a assinatura:', paymentId, amountCents, subscription.amount_cents)
+    return json({ ok: true, ignored: 'valor menor que o da assinatura' })
+  }
+
+  const already = await env.DB.prepare('SELECT 1 AS found FROM payment_events WHERE external_id = ?').bind(paymentId).first()
+  if (already) return json({ ok: true, duplicate: true })
+
+  const today = new Date().toISOString().slice(0, 10)
+  const base = subscription.paid_until && subscription.paid_until > today ? subscription.paid_until : today
+  const paidUntil = addDays(base, SUBSCRIPTION_DAYS)
+  const payload = JSON.stringify({ method: 'mercado_pago', payment_id: paymentId, payment_type: payment.payment_type_id, paid_until: paidUntil })
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO payment_events (merchant_id, provider, external_id, status, amount_cents, payload) VALUES (?, 'mercado_pago', ?, 'paid', ?, ?)`).bind(merchantId, paymentId, amountCents, payload),
+      env.DB.prepare(`UPDATE subscriptions SET status = 'active', paid_until = ?, mercado_pago_payment_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).bind(paidUntil, paymentId, merchantId),
+      env.DB.prepare(`UPDATE merchants SET plan = 'monthly', status = 'active', next_billing_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(paidUntil, merchantId),
+    ])
+  } catch (err) {
+    if (String(err).toLowerCase().includes('unique')) return json({ ok: true, duplicate: true })
+    console.error('Falha ao registrar pagamento do Mercado Pago:', err)
+    return error('Não foi possível registrar o pagamento', 500)
+  }
+  return json({ ok: true, merchantId, paidUntil })
+}
+
 async function serveAsset(request, env, url, path) {
   if (!env.ASSETS) return new Response('Asset binding ASSETS não configurado', { status: 500 })
   let assetRequest = request
@@ -428,6 +571,8 @@ export default {
       if (path === '/api/merchants' && request.method === 'POST') return await createMerchant(request, env)
       if (path === '/api/merchants' && request.method === 'GET') return await listMerchants(request, env)
       if (path === '/api/orders' && request.method === 'POST') return await createOrder(request, env)
+      if (path === '/api/checkout' && request.method === 'POST') return await createCheckout(request, env, url)
+      if (path === '/api/mp/webhook' && request.method === 'POST') return await mpWebhook(request, env, url)
       if (path === '/api/orders' && request.method === 'GET') return await listOrders(request, env)
       if (path.startsWith('/api/')) return error('Rota não encontrada', 404)
       return await serveAsset(request, env, url, path)

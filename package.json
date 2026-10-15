@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:init:local": "wrangler d1 execute microfood --local --file=./schema.sql",
-    "db:init:remote": "wrangler d1 execute microfood --remote --file=./schema.sql"
+    "db:init:local": "wrangler d1 execute microfoodbr --local --file=./schema.sql",
+    "db:init:remote": "wrangler d1 execute microfoodbr --remote --file=./schema.sql"
   },
   "devDependencies": {
     "wrangler": "^4.151.0"
