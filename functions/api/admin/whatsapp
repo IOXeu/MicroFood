@@ -1,0 +1,14 @@
+export async function onRequestPost(context){
+ const {env,request}=context;if(!(await requireAdmin(env,request)))return json({error:'Não autorizado.'},401);
+ let b;try{b=await request.json()}catch{return json({error:'Corpo inválido.'},400)}
+ const merchantId=String(b.merchantId||'').trim(),to=String(b.to||'').replace(/\D/g,''),message=String(b.message||'').trim();
+ if(!merchantId||to.length<12||!message)return json({error:'Informe cadastro, número completo e mensagem.'},400);
+ const token=env.WHATSAPP_TOKEN,phoneId=env.WHATSAPP_PHONE_NUMBER_ID;
+ if(!token||!phoneId)return json({sent:false,reason:'Cloud API não configurada.',fallbackUrl:`https://wa.me/${to}?text=${encodeURIComponent(message)}`});
+ const r=await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`,{method:'POST',headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},body:JSON.stringify({messaging_product:'whatsapp',to,type:'text',text:{body:message}})});
+ const d=await r.json().catch(()=>({}));
+ if(!r.ok)return json({sent:false,error:d?.error?.message||`Falha no envio (${r.status})`},502);
+ return json({sent:true,messageId:d?.messages?.[0]?.id||null});
+}
+async function requireAdmin(env,request){const e=env.ADMIN_PASSPHRASE;if(!e)return false;const p=request.headers.get('x-admin-pass')||'';if(p.length!==e.length)return false;const a=new TextEncoder().encode(p),b=new TextEncoder().encode(e);let d=0;for(let i=0;i<a.length;i++)d|=a[i]^b[i];return d===0}
+function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}})}
