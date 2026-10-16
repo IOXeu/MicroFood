@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Avisos WhatsApp</title>
+<style>:root{--ink:#20382c;--green:#245c42;--line:#d9d5c9;--muted:#66736a}*{box-sizing:border-box}body{margin:0;background:#f7f5ee;color:var(--ink);font:15px/1.55 system-ui,sans-serif}.wrap{width:min(720px,calc(100% - 24px));margin:auto}.top{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--line)}.brand{font-weight:850}.brand span{display:inline-grid;place-items:center;width:30px;height:30px;background:#e97843;color:#fff;border-radius:10px 10px 10px 3px;margin-right:6px}.btn{border:0;background:var(--green);color:#fff;padding:10px 15px;border-radius:10px;font-weight:750;cursor:pointer;text-decoration:none}.btn.secondary{background:#fff;color:inherit;border:1px solid var(--line)}.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;margin:18px 0}h1{font-size:23px;margin:0 0 6px}.muted{color:var(--muted);font-size:14px}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}.field label{font-size:13px;font-weight:750}.field input,.field select{padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff}.msg{margin-top:12px;font-size:14px;white-space:pre-line}.ok{color:#1d6b40}.bad{color:#a23024}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:560px){.grid{grid-template-columns:1fr}}</style></head>
+<body><div class="wrap"><header class="top"><div class="brand"><span>M</span>Avisos WhatsApp</div><a class="btn secondary" href="/painel/">Voltar</a></header>
+<div class="card"><h1>Enviar aviso ao cliente</h1><p class="muted">Use templates aprovados na Meta. O envio fica registrado no banco.</p>
+<div class="field"><label>Pedido</label><select id="order"><option value="">Carregando pedidos…</option></select></div>
+<div class="grid"><div class="field"><label>Aviso</label><select id="event">
+<option value="received">Pedido recebido</option>
+<option value="ready">Pedido pronto</option>
+<option value="rider">Entregador a caminho</option>
+<option value="delivered">Pedido entregue</option></select></div>
+<div class="field"><label>&nbsp;</label><button id="send" class="btn" type="button">Enviar aviso</button></div></div>
+<div id="msg" class="msg"></div></div></div>
+<script>(()=>{'use strict';const $=s=>document.querySelector(s);
+async function j(u,o){const r=await fetch(u,o);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('Erro '+r.status));return d}
+async function loadOrders(){try{const d=await j('/api/orders');const list=d.orders||d||[];$('#order').innerHTML='<option value="">Escolha o pedido</option>'+list.map(o=>`<option value="${o.id}">${o.order_code||('Pedido #'+o.id)} — ${o.customer_name||''}</option>`).join('')}catch(e){$('#order').innerHTML=`<option value="">${e.message}</option>`}}
+$('#send').addEventListener('click',async()=>{const id=$('#order').value;const ev=$('#event').value;const m=$('#msg');if(!id){m.textContent='Escolha um pedido.';m.className='msg bad';return}
+try{await j('/api/whatsapp/notice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id:Number(id),event:ev})});m.textContent='Aviso enviado ao cliente.';m.className='msg ok'}catch(e){m.textContent=e.message;m.className='msg bad'}});
+loadOrders();})();
+</script></body></html>
