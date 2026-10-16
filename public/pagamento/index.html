@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Pagamento do pedido</title>
+<style>body{margin:0;background:#f7f5ee;color:#20382c;font:15px/1.55 system-ui,sans-serif}.wrap{width:min(560px,calc(100% - 24px));margin:auto;padding:28px 0}.card{background:#fff;border:1px solid #d9d5c9;border-radius:16px;padding:24px}h1{font-size:22px;margin:0 0 8px}.muted{color:#66736a;font-size:14px}.btn{display:block;width:100%;border:0;background:#245c42;color:#fff;padding:13px;border-radius:12px;font-weight:800;font-size:16px;cursor:pointer;margin-top:16px}.msg{margin-top:12px;font-size:14px;white-space:pre-line}.ok{color:#1d6b40}.bad{color:#a23024}</style></head>
+<body><div class="wrap"><div class="card"><h1>Pagamento do pedido</h1><p class="muted" id="info">Carregando…</p><button id="pay" class="btn" type="button">Pagar com Mercado Pago</button><div id="msg" class="msg"></div></div></div>
+<script>(()=>{'use strict';const $=s=>document.querySelector(s);const q=new URLSearchParams(location.search);const orderId=q.get('pedido');
+async function j(u,o){const r=await fetch(u,o);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('Erro '+r.status));return d}
+(async()=>{try{if(!orderId)throw new Error('Pedido não informado.');const d=await j('/api/consumer/order?id='+encodeURIComponent(orderId));$('#info').textContent=`${d.order?.store_name||'Loja'} · Pedido ${d.order?.order_code||orderId} · Total R$ ${(Number(d.order?.total||0)).toFixed(2).replace('.',',')}`}catch(e){$('#info').textContent=e.message;$('#pay').disabled=true}})();
+$('#pay').addEventListener('click',async()=>{const m=$('#msg');try{const d=await j('/api/consumer/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order_id:Number(orderId)})});if(d.init_point)location.href=d.init_point;else throw new Error(d.error||'Não foi possível iniciar o pagamento.')}catch(e){m.textContent=e.message;m.className='msg bad'}});
+})();
+</script></body></html>
