@@ -1,0 +1,11 @@
+export async function onRequestPost(context){
+ const {env,request}=context;const expected=env.ADMIN_PASSPHRASE;
+ if(!expected)return json({error:'ADMIN_PASSPHRASE não configurada.'},500);
+ const provided=request.headers.get('x-admin-pass')||'';
+ if(provided.length!==expected.length)return json({error:'Senha incorreta.'},401);
+ const a=new TextEncoder().encode(provided),b=new TextEncoder().encode(expected);let d=0;
+ for(let i=0;i<a.length;i++)d|=a[i]^b[i];
+ if(d!==0)return json({error:'Senha incorreta.'},401);
+ return json({ok:true});
+}
+function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}})}
