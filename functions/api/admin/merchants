@@ -1,0 +1,16 @@
+export async function onRequestGet(context){
+ const {env,request}=context;
+ if(!(await requireAdmin(env,request)))return json({error:'Não autorizado.'},401);
+ const rows=await env.DB.prepare(`SELECT m.id,m.business_name,m.owner_name,m.email,m.phone,m.created_at,
+  s.status AS subscription_status,s.paid_until,s.updated_at AS subscription_updated_at,
+  u.email AS access_email,u.is_active AS access_active
+  FROM merchants m
+  LEFT JOIN subscriptions s ON s.merchant_id=m.id
+  LEFT JOIN merchant_users u ON u.merchant_id=m.id
+  ORDER BY m.created_at DESC`).all();
+ return json({merchants:(rows.results||[]).map(r=>({id:r.id,business_name:r.business_name,owner_name:r.owner_name,email:r.email,phone:r.phone,created_at:r.created_at,
+  payment:{webhookApproved:r.subscription_status==='active',status:r.subscription_status||null,approvedAt:r.subscription_updated_at||null},
+  access:r.access_email?{email:r.access_email,is_active:!!r.access_active}:null}))});
+}
+async function requireAdmin(env,request){const e=env.ADMIN_PASSPHRASE;if(!e)return false;const p=request.headers.get('x-admin-pass')||'';if(p.length!==e.length)return false;const a=new TextEncoder().encode(p),b=new TextEncoder().encode(e);let d=0;for(let i=0;i<a.length;i++)d|=a[i]^b[i];return d===0}
+function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}})}
