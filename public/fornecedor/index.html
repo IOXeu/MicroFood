@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Catálogo</title>
+<style>:root{--accent:#245c42;--ink:#222;--muted:#666}*{box-sizing:border-box}body{margin:0;background:#faf8f2;color:var(--ink);font:16px/1.55 system-ui,sans-serif}img{display:block;max-width:100%;object-fit:cover}.hero{position:relative}.hero img{height:220px;width:100%;background:#ddd}.hero .overlay{position:absolute;inset:0;background:linear-gradient(0deg,#000c,transparent 60%);color:#fff;display:flex;flex-direction:column;justify-content:flex-end;padding:20px}.hero h1{margin:0;font-size:29px}.hero p{margin:4px 0 0;font-size:14px;opacity:.9}.notice{background:#eef6f1;border-bottom:1px solid #cfe2d7;padding:10px 16px;font-size:13px}.wrap{width:min(760px,calc(100% - 26px));margin:auto;padding:18px 0 100px}.cat{font-weight:850;margin:20px 0 10px;text-transform:uppercase;letter-spacing:.08em;font-size:13px;color:var(--muted)}.item{background:#fff;border:1px solid #e5e0d3;border-radius:14px;padding:14px;margin-bottom:10px;display:grid;grid-template-columns:1fr auto;gap:10px}.item h3{margin:0;font-size:17px}.item p{margin:4px 0 0;font-size:13px;color:var(--muted)}.price{font-weight:850;color:var(--accent)}.qty{display:flex;align-items:center;gap:8px}.qty button{width:32px;height:32px;border-radius:8px;border:1px solid #ccc;background:#fff;font-weight:800}.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #ddd;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 -6px 20px #0001}.bar button{border:0;background:var(--accent);color:#fff;padding:12px 18px;border-radius:10px;font-weight:800}.empty{text-align:center;color:var(--muted);padding:40px 0}.modal{position:fixed;inset:0;background:#0008;display:none;place-items:center;padding:16px;z-index:9}.modal.open{display:grid}.box{background:#fff;border-radius:14px;padding:20px;width:min(430px,100%)}.box input{width:100%;padding:11px;border:1px solid #ccc;border-radius:9px;margin:6px 0 12px}.status{font-size:13px;margin-top:8px;white-space:pre-line}.status.bad{color:#a23024}</style></head>
+<body><div id="app"><div class="empty">Carregando catálogo…</div></div>
+<div class="bar hidden" id="bar"><strong id="total">R$ 0,00</strong><button id="send">Solicitar orçamento</button></div>
+<div class="modal" id="modal"><div class="box"><h3>Solicitar orçamento</h3><label>Seu nome / loja</label><input id="cname" maxlength="80"><label>Seu WhatsApp</label><input id="cphone" inputmode="numeric" placeholder="5517999999999"><div id="mstatus" class="status"></div><div style="display:flex;gap:10px;margin-top:10px"><button class="btn" style="background:#fff;color:#222;border:1px solid #ccc" onclick="document.getElementById('modal').classList.remove('open')">Voltar</button><button class="btn" id="confirm">Enviar pelo WhatsApp</button></div></div></div>
+<script>(()=>{'use strict';const q=new URLSearchParams(location.search);const supplier=q.get('fornecedor');const cart={};let profile=null,products=[];
+const $=s=>document.querySelector(s);const money=c=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(c/100);
+function render(){const app=$('#app');if(!profile){app.innerHTML='<div class="empty">Catálogo não encontrado ou não publicado.</div>';return}
+document.title=profile.company_name||'Catálogo';document.documentElement.style.setProperty('--accent',profile.primary_color||'#245c42');
+let html=`<div class="hero">${profile.cover_image_url?`<img src="${profile.cover_image_url}" alt="">`:''}<div class="overlay"><h1>${profile.company_name||'Catálogo'}</h1><p>${profile.description||''}</p></div></div>`;
+html+='<div class="wrap">';
+if(profile.delivery_regions)html+=`<div class="notice">Atende: ${profile.delivery_regions}</div>`;
+if(profile.minimum_order_cents)html+=`<div class="notice">Pedido mínimo: ${money(profile.minimum_order_cents)}</div>`;
+const cats=[...new Set(products.map(p=>p.category||'Produtos'))];
+if(!products.length)html+='<div class="empty">Nenhum item publicado.</div>';
+for(const c of cats){html+=`<div class="cat">${c}</div>`;for(const p of products.filter(x=>(x.category||'Produtos')===c)){const n=cart[p.id]||0;html+=`<div class="item"><div><h3>${p.name}</h3><p>${p.description||''}</p><div class="price">${money(p.price_cents)} / ${p.unit}</div><small class="muted">Mínimo: ${p.minimum_quantity} ${p.unit}</small></div><div class="qty"><button data-dec="${p.id}">−</button><span>${n}</span><button data-inc="${p.id}">+</button></div></div>`}}
+html+='</div>';app.innerHTML=html;
+app.querySelectorAll('[data-inc]').forEach(b=>b.addEventListener('click',()=>{cart[b.dataset.inc]=(cart[b.dataset.inc]||0)+1;render()}));
+app.querySelectorAll('[data-dec]').forEach(b=>b.addEventListener('click',()=>{const id=b.dataset.dec;if(cart[id]){cart[id]--;if(!cart[id])delete cart[id];render()}}));updateBar()}
+function items(){return products.filter(p=>cart[p.id]).map(p=>({...p,qty:cart[p.id]}))}
+function total(){return items().reduce((s,p)=>s+p.price_cents*p.qty,0)}
+function updateBar(){const n=items().reduce((s,p)=>s+p.qty,0);$('#bar').classList.toggle('hidden',!n);$('#total').textContent=`${n} item(ns) · ${money(total())}`}
+$('#send').addEventListener('click',()=>{$('#modal').classList.add('open')});
+$('#confirm').addEventListener('click',()=>{const st=$('#mstatus');st.textContent='Abrindo WhatsApp…';const its=items();if(!its.length){st.textContent='Escolha itens do catálogo.';st.className='status bad';return}
+const min=profile.minimum_order_cents||0;if(total()<min){st.textContent=`O pedido mínimo é ${money(min)}.`;st.className='status bad';return}
+const lines=its.map(p=>`${p.qty} ${p.unit} — ${p.name} — ${money(p.price_cents*p.qty)}`);
+const text=[`*Solicitação de orçamento — ${profile.company_name||'Fornecedor'}`,`Cliente: ${$('#cname').value.trim()||'—'}`,'',...lines,'',`*Total estimado: ${money(total())}*`].join('\n');
+const phone=String(profile.whatsapp_number||'').replace(/\D/g,'');
+if(!phone){st.textContent='Fornecedor sem WhatsApp configurado.';st.className='status bad';return}
+location.assign(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`)});
+(async()=>{try{const r=await fetch(`/api/public/supplier?merchantId=${encodeURIComponent(supplier||'')}`);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Catálogo não encontrado.');profile=d.profile;products=(d.products||[]).filter(p=>p.is_active);render()}catch(e){$('#app').innerHTML=`<div class="empty">${e.message}</div>`}})();
+})();
+</script></body></html>
