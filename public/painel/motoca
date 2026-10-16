@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Área do entregador</title>
+<style>:root{--ink:#20382c;--green:#245c42;--line:#d9d5c9;--muted:#66736a}*{box-sizing:border-box}body{margin:0;background:#f7f5ee;color:var(--ink);font:15px/1.55 system-ui,sans-serif}.wrap{width:min(980px,calc(100% - 24px));margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}.brand{font-weight:850}.brand span{display:inline-grid;place-items:center;width:30px;height:30px;background:#e97843;color:#fff;border-radius:10px 10px 10px 3px;margin-right:6px}.btn{display:inline-block;border:0;background:var(--green);color:#fff;padding:10px 15px;border-radius:10px;font-weight:750;cursor:pointer;text-decoration:none}.btn.secondary{background:#fff;color:inherit;border:1px solid var(--line)}.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;margin:18px 0}h1{font-size:24px;margin:0 0 6px}h2{font-size:18px;margin:0 0 12px}.muted{color:var(--muted);font-size:14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:13px;font-weight:750}.field input{padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.row .field{flex:1;min-width:150px}.msg{margin-top:12px;font-size:14px;white-space:pre-line}.ok{color:#1d6b40}.bad{color:#a23024}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}th{font-size:12px;text-transform:uppercase;color:var(--muted)}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}.kpi b{display:block;font-size:20px}.kpi small{color:var(--muted);font-size:12px}.badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:12px;font-weight:800;background:#eef2ee}.badge.new{background:#e2f0fb;color:#1c4f80}.badge.done{background:#e2f5e8;color:#1d6b40}@media(max-width:760px){.grid,.kpis{grid-template-columns:1fr 1fr}}@media(max-width:480px){.grid,.kpis{grid-template-columns:1fr}}</style></head>
+<body><div class="wrap"><header class="top"><div class="brand"><span>M</span>Área do entregador</div><a class="btn secondary" href="/painel/">Voltar ao painel</a></header>
+
+<div class="card"><h1>Minha atuação</h1><p class="muted">Configure sua base, cobertura e preço. Os dados ficam salvos na sua conta.</p>
+<div class="grid"><div class="field"><label>CEP-base</label><input id="cep" placeholder="Ex.: 01310-100"></div>
+<div class="field"><label>Raio de atendimento (km)</label><input id="raio" type="number" min="1" max="50" step="1"></div>
+<div class="field"><label>Taxa até 5 km (R$)</label><input id="taxa5" type="number" min="0" step="0.01"></div>
+<div class="field"><label>Valor por km extra (R$)</label><input id="kmextra" type="number" min="0" step="0.01"></div></div>
+<button id="save" class="btn" style="margin-top:14px" type="button">Salvar perfil</button><div id="pmsg" class="msg"></div></div>
+
+<div class="card"><h2>Resumo</h2><div class="kpis">
+<div class="kpi"><b id="k-jobs">0</b><small>Corridas disponíveis</small></div>
+<div class="kpi"><b id="k-done">0</b><small>Corridas concluídas</small></div>
+<div class="kpi"><b id="k-gain">R$ 0,00</b><small>Ganho estimado</small></div>
+<div class="kpi"><b id="k-cost">R$ 0,00</b><small>Custos registrados</small></div></div></div>
+
+<div class="card"><h2>Corridas</h2><p class="muted">Pedidos com entrega que ainda podem ser assumidos.</p><div id="jobs">Carregando…</div></div>
+
+<div class="card"><h2>Gasolina e custos</h2>
+<div class="row"><div class="field"><label>Data</label><input id="cdate" type="date"></div>
+<div class="field"><label>Descrição</label><input id="cdesc" placeholder="Gasolina, óleo, pedágio…"></div>
+<div class="field"><label>Litros (opcional)</label><input id="clitros" type="number" min="0" step="0.01"></div>
+<div class="field"><label>Valor total (R$)</label><input id="cvalor" type="number" min="0" step="0.01"></div>
+<button id="addcost" class="btn" type="button">Registrar</button></div><div id="cmsg" class="msg"></div>
+<div style="margin-top:16px"><table><thead><tr><th>Data</th><th>Descrição</th><th>Litros</th><th>Valor</th></tr></thead><tbody id="costs"></tbody></table></div></div></div>
+
+<script>(()=>{'use strict';const $=s=>document.querySelector(s);const brl=v=>'R$ '+(Number(v||0)).toFixed(2).replace('.',',');
+async function j(url,opt){const r=await fetch(url,opt);const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('Erro '+r.status));return d}
+async function loadProfile(){try{const d=await j('/api/deliverer/profile');const p=d.profile||{};$('#cep').value=p.cep_base||'';$('#raio').value=p.raio_km??'';$('#taxa5').value=p.taxa_ate5??'';$('#kmextra').value=p.valor_km_extra??''}catch(e){show('#pmsg',e.message,'bad')}}
+function show(sel,text,cls){const el=$(sel);el.textContent=text;el.className='msg '+(cls||'')}
+$('#save').addEventListener('click',async()=>{try{await j('/api/deliverer/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({cep_base:$('#cep').value.trim(),raio_km:Number($('#raio').value||0),taxa_ate5:Number($('#taxa5').value||0),valor_km_extra:Number($('#kmextra').value||0)})});show('#pmsg','Perfil salvo.','ok')}catch(e){show('#pmsg',e.message,'bad')}});
+async function loadAll(){try{const [s,jd,cd]=await Promise.all([j('/api/deliverer/summary'),j('/api/deliverer/jobs'),j('/api/deliverer/costs')]);
+$('#k-jobs').textContent=s.open_jobs??0;$('#k-done').textContent=s.done_jobs??0;$('#k-gain').textContent=brl(s.estimated_gain);$('#k-cost').textContent=brl(s.total_costs);
+$('#jobs').innerHTML=(jd.jobs||[]).map(x=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><div><b>${x.order_code||('Pedido #'+x.id)}</b><div class="muted">${x.customer_name||'Cliente'} · ${x.delivery_address||''}</div></div><div style="text-align:right"><span class="badge new">${x.status||'aguardando'}</span><div class="muted">${brl(x.delivery_fee)}</div></div></div>`).join('')||'<p class="muted">Nenhuma corrida disponível agora.</p>';
+$('#costs').innerHTML=(cd.costs||[]).map(c=>`<tr><td>${c.cost_date||''}</td><td>${c.description||''}</td><td>${c.litros??''}</td><td>${brl(c.total)}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">Nenhum custo registrado.</td></tr>'}catch(e){$('#jobs').textContent=e.message}}
+$('#addcost').addEventListener('click',async()=>{try{await j('/api/deliverer/costs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cost_date:$('#cdate').value,description:$('#cdesc').value.trim(),litros:Number($('#clitros').value||0),total:Number($('#cvalor').value||0)})});$('#cdesc').value='';$('#clitros').value='';$('#cvalor').value='';show('#cmsg','Custo registrado.','ok');loadAll()}catch(e){show('#cmsg',e.message,'bad')}});
+loadProfile();loadAll();})();
+</script></body></html>
