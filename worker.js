@@ -517,6 +517,99 @@ async function mpWebhook(request, env, url) {
   return json({ ok: true, merchantId, paidUntil })
 }
 
+// ===== Guardiã do Repositório =====
+const AI_API = 'https://api.openai.com/v1/chat/completions'
+const AI_MODEL = 'gpt-4o-mini'
+const AI_MAX_CHARS = 12_000
+
+function aiTruncate(value) {
+  return typeof value === 'string' ? value.slice(0, AI_MAX_CHARS) : ''
+}
+
+async function aiReview(request, env) {
+  if (!sameOrigin(request)) return error('Origem não autorizada', 403)
+  if (!env.OPENAI_API_KEY) return error('A Guardiã ainda não está configurada', 503)
+
+  let body
+  try { body = await readJson(request, 65_536) } catch {
+    return error('JSON inválido ou muito grande', 413)
+  }
+
+  const filePath = cleanString(body?.path, 300)
+  const situation = cleanString(body?.situation, 30)
+  const newContent = aiTruncate(body?.newContent)
+  const oldContent = aiTruncate(body?.oldContent)
+
+  if (!filePath) return error('Informe o caminho do arquivo', 422)
+  if (!['novo', 'conflito', 'duplicado'].includes(situation)) {
+    return error('Situação inválida. Use: novo, conflito ou duplicado', 422)
+  }
+  if (!newContent) return error('Informe o conteúdo do arquivo novo', 422)
+
+  const system = [
+    'Você é a Guardiã do Repositório MicroFoodBR.',
+    'Analise arquivos candidatos à integração e responda SOMENTE com JSON válido.',
+    'Formato: {"decisao":"entrar|atualizar|substituir|manter_antigo|acao_manual","confianca":"alta|media|baixa","motivo":"texto curto","riscos":["texto"],"passos":["texto"]}.',
+    'Regras: arquivos SQL, variáveis de ambiente, credenciais, chaves e configurações sensíveis devem receber decisao "acao_manual".',
+    'Não invente conteúdo. Se faltar informação, use confianca "baixa".',
+  ].join(' ')
+
+  const user = [
+    `Arquivo: ${filePath}`,
+    `Situação: ${situation}`,
+    'Conteúdo novo:',
+    newContent,
+    oldContent ? 'Conteúdo atual no repositório:' : 'Não há conteúdo anterior informado.',
+    oldContent,
+  ].join('\n')
+
+  const response = await fetch(AI_API, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      temperature: 0.2,
+    }),
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    console.error('OpenAI recusou a análise:', response.status, JSON.stringify(data).slice(0, 500))
+    return error('A Guardiã não conseguiu analisar agora', 502)
+  }
+
+  let analysis
+  try {
+    analysis = JSON.parse(data.choices?.[0]?.message?.content || '{}')
+  } catch {
+    return error('Resposta inválida da IA', 502)
+  }
+
+  const decisions = new Set(['entrar', 'atualizar', 'substituir', 'manter_antigo', 'acao_manual'])
+  if (!decisions.has(analysis.decisao)) {
+    return error('A IA retornou uma decisão inválida', 502)
+  }
+
+  return json({
+    ok: true,
+    path: filePath,
+    situation,
+    decision: analysis.decisao,
+    confidence: analysis.confianca || 'baixa',
+    reason: cleanString(analysis.motivo, 500),
+    risks: Array.isArray(analysis.riscos) ? analysis.riscos.slice(0, 10).map((item) => cleanString(item, 300)) : [],
+    steps: Array.isArray(analysis.passos) ? analysis.passos.slice(0, 10).map((item) => cleanString(item, 300)) : [],
+  })
+}
+
 async function serveAsset(request, env, url, path) {
   if (!env.ASSETS) return new Response('Asset binding ASSETS não configurado', { status: 500 })
   let assetRequest = request
@@ -567,6 +660,7 @@ export default {
       if (path === '/api/checkout' && request.method === 'POST') return await createCheckout(request, env, url)
       if (path === '/api/mp/webhook' && request.method === 'POST') return await mpWebhook(request, env, url)
       if (path === '/api/orders' && request.method === 'GET') return await listOrders(request, env)
+      if (path === '/api/ai/review' && request.method === 'POST') return await aiReview(request, env)
       if (path.startsWith('/api/')) return error('Rota não encontrada', 404)
       return await serveAsset(request, env, url, path)
     } catch (err) {
