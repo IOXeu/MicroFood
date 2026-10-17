@@ -583,7 +583,7 @@ async function aiReview(request, env) {
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
     console.error('OpenAI recusou a análise:', response.status, JSON.stringify(data).slice(0, 500))
-    return error('A Guardiã não conseguiu analisar agora', 502)
+    return error(`A Guardiã não conseguiu analisar agora (OpenAI ${response.status})`, 502)
   }
 
   let analysis
