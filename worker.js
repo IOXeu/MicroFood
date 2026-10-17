@@ -252,4 +252,414 @@ async function adminOrders(url, env) {
       if (!byOrder.has(item.order_id)) byOrder.set(item.order_id, [])
       byOrder.get(item.order_id).push(item)
     }
-    return js
+    return json({ orders: orders.map((order) => ({ ...order, items: byOrder.get(order.id) || [] })), total: Number(totalRow?.total || 0), limit, offset })
+  } catch (err) {
+    console.error('Falha ao carregar pedidos administrativos:', err)
+    return error('Não foi possível carregar os pedidos', 500)
+  }
+}
+
+async function updateOrder(request, env, orderId) {
+  if (!sameOrigin(request)) return error('Origem não autorizada', 403)
+  let body
+  try { body = await readJson(request, 4_096) } catch { return error('JSON inválido') }
+  const status = body?.status
+  if (!ORDER_STATUSES.has(status)) return error('Status de pedido inválido', 422)
+  try {
+    const result = await env.DB.prepare('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(status, orderId).run()
+    if (!result.meta?.changes) return error('Pedido não encontrado', 404)
+    return json({ ok: true, id: orderId, status })
+  } catch (err) {
+    console.error('Falha ao atualizar pedido:', err)
+    return error('Não foi possível atualizar o pedido', 500)
+  }
+}
+
+async function recordManualPayment(request, env, merchantId) {
+  if (!sameOrigin(request)) return error('Origem não autorizada', 403)
+  let body
+  try { body = await readJson(request, 8_192) } catch { return error('JSON inválido') }
+  const paidUntil = cleanString(body?.paidUntil, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidUntil) || Number.isNaN(Date.parse(`${paidUntil}T00:00:00Z`))) {
+    return error('Informe uma data válida de pagamento até', 422)
+  }
+  try {
+    const subscription = await env.DB.prepare('SELECT amount_cents FROM subscriptions WHERE merchant_id = ?').bind(merchantId).first()
+    if (!subscription) return error('Assinatura não encontrada para este comerciante', 404)
+    const amountCents = body?.amountCents == null ? Number(subscription.amount_cents) : Number(body.amountCents)
+    if (!Number.isSafeInteger(amountCents) || amountCents < 1 || amountCents > 100_000_000) return error('Valor inválido', 422)
+    const reference = cleanString(body?.reference, 120)
+    const note = cleanString(body?.note, 500)
+    const externalId = `manual-${crypto.randomUUID()}`
+    const payload = JSON.stringify({ method: 'manual', reference, note, paid_until: paidUntil })
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE subscriptions SET status = 'active', paid_until = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).bind(paidUntil, merchantId),
+      env.DB.prepare(`UPDATE merchants SET plan = 'monthly', status = 'active', next_billing_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(paidUntil, merchantId),
+      env.DB.prepare(`INSERT INTO payment_events (merchant_id, provider, external_id, status, amount_cents, payload) VALUES (?, 'manual', ?, 'paid', ?, ?)`).bind(merchantId, externalId, amountCents, payload),
+    ])
+    return json({ ok: true, merchantId, amountCents, paidUntil, reference })
+  } catch (err) {
+    console.error('Falha ao registrar pagamento manual:', err)
+    return error('Não foi possível registrar o pagamento', 500)
+  }
+}
+
+async function createOrder(request, env) {
+  let body
+  try { body = await readJson(request) } catch (err) {
+    return err.message === 'PAYLOAD_TOO_LARGE' ? error('Pedido muito grande', 413) : error('JSON inválido')
+  }
+  const merchantId = Number(body?.merchantId)
+  const customerName = cleanString(body?.customerName, 120)
+  const customerPhone = cleanString(body?.customerPhone, 40)
+  const deliveryAddress = cleanString(body?.deliveryAddress, 500)
+  const notes = cleanString(body?.notes, 500)
+  if (!Number.isInteger(merchantId) || merchantId < 1 || !customerName || !customerPhone || !Array.isArray(body?.items) || body.items.length < 1 || body.items.length > 20) {
+    return error('Informe comerciante, cliente, telefone e itens')
+  }
+  const quantities = new Map()
+  for (const row of body.items) {
+    const id = Number(row?.menuItemId)
+    const quantity = Number(row?.quantity)
+    if (!Number.isInteger(id) || id < 1 || !Number.isInteger(quantity) || quantity < 1 || quantity > 20) return error('Produto ou quantidade inválida')
+    quantities.set(id, (quantities.get(id) || 0) + quantity)
+    if (quantities.get(id) > 20) return error('A quantidade máxima por produto é 20')
+  }
+  let orderId
+  try {
+    const ids = [...quantities.keys()]
+    const placeholders = ids.map(() => '?').join(', ')
+    const { results } = await env.DB.prepare(`
+      SELECT id, merchant_id, name, price_cents FROM menu_items
+      WHERE merchant_id = ? AND available = 1 AND id IN (${placeholders})
+    `).bind(merchantId, ...ids).all()
+    const catalog = new Map(results.map((item) => [item.id, item]))
+    if (catalog.size !== ids.length) return error('Produto indisponível ou não encontrado', 422)
+    let total = 0
+    const lines = []
+    for (const [id, quantity] of quantities) {
+      const item = catalog.get(id)
+      const subtotal = item.price_cents * quantity
+      if (!Number.isSafeInteger(subtotal) || !Number.isSafeInteger(total + subtotal)) return error('Total do pedido inválido')
+      total += subtotal
+      lines.push({ item, quantity, subtotal })
+    }
+    if (total <= 0) return error('Pedido inválido')
+    const inserted = await env.DB.prepare(`
+      INSERT INTO orders (merchant_id, customer_name, customer_phone, delivery_address, notes, total_cents)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(merchantId, customerName, customerPhone, deliveryAddress || null, notes || null, total).run()
+    orderId = inserted.meta.last_row_id
+    const statements = lines.map(({ item, quantity, subtotal }) => env.DB.prepare(`
+      INSERT INTO order_items (order_id, menu_item_id, item_name, unit_price_cents, quantity, subtotal_cents)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(orderId, item.id, item.name, item.price_cents, quantity, subtotal))
+    await env.DB.batch(statements)
+    return json({ id: orderId, totalCents: total, status: 'pending' }, 201)
+  } catch (err) {
+    if (orderId) {
+      try { await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(orderId).run() } catch { /* best-effort cleanup */ }
+    }
+    console.error('Falha ao criar pedido:', err)
+    return error('Não foi possível registrar o pedido', 500)
+  }
+}
+
+async function listOrders(request, env) {
+  if (!await isAdmin(request, env)) return error('Não autorizado', 401)
+  try {
+    const { results } = await env.DB.prepare(`
+      SELECT o.id, o.customer_name, o.customer_phone, o.total_cents, o.status,
+             o.created_at, m.business_name
+      FROM orders o JOIN merchants m ON m.id = o.merchant_id
+      ORDER BY o.created_at DESC LIMIT 100
+    `).all()
+    return json({ orders: results })
+  } catch (err) {
+    console.error('Falha ao listar pedidos:', err)
+    return error('Não foi possível carregar os pedidos', 500)
+  }
+}
+
+const MP_API = 'https://api.mercadopago.com'
+const SUBSCRIPTION_DAYS = 30
+
+function mpToken(env) {
+  return env.Access_Token || env.MP_ACCESS_TOKEN || ''
+}
+
+function hex(bytes) {
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function validMpSignature(request, url, secret) {
+  const header = request.headers.get('x-signature') || ''
+  const parts = Object.fromEntries(header.split(',').map((part) => {
+    const index = part.indexOf('=')
+    return index < 0 ? ['', ''] : [part.slice(0, index).trim(), part.slice(index + 1).trim()]
+  }))
+  const ts = parts.ts
+  const v1 = parts.v1
+  if (!ts || !v1) return false
+  const requestId = request.headers.get('x-request-id') || ''
+  let dataId = url.searchParams.get('data.id') || ''
+  if (/^[A-Za-z0-9]+$/.test(dataId)) dataId = dataId.toLowerCase()
+  let manifest = ''
+  if (dataId) manifest += `id:${dataId};`
+  if (requestId) manifest += `request-id:${requestId};`
+  manifest += `ts:${ts};`
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const expected = hex(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(manifest)))
+  return secureEqual(expected, v1.toLowerCase())
+}
+
+async function createCheckout(request, env, url) {
+  if (!sameOrigin(request)) return error('Origem não autorizada', 403)
+  const token = mpToken(env)
+  if (!token) return error('Pagamento online ainda não está configurado', 503)
+  let body
+  try { body = await readJson(request, 4_096) } catch { return error('JSON inválido') }
+  const merchantId = Number(body?.merchantId)
+  const email = cleanString(body?.email, 160).toLowerCase()
+  if (!Number.isSafeInteger(merchantId) || merchantId < 1 || !email) return error('Dados inválidos', 422)
+
+  const row = await env.DB.prepare(`
+    SELECT m.id, m.business_name, m.email, s.amount_cents
+    FROM merchants m JOIN subscriptions s ON s.merchant_id = m.id
+    WHERE m.id = ?
+  `).bind(merchantId).first()
+  if (!row || String(row.email).toLowerCase() !== email) return error('Cadastro não encontrado', 404)
+
+  const preference = {
+    items: [{
+      id: `assinatura-${row.id}`,
+      title: 'Assinatura MicroFoodBR (30 dias)',
+      quantity: 1,
+      currency_id: 'BRL',
+      unit_price: Number(row.amount_cents) / 100,
+    }],
+    payer: { email: row.email },
+    external_reference: String(row.id),
+    notification_url: `${url.origin}/api/mp/webhook`,
+    back_urls: { success: url.origin, pending: url.origin, failure: url.origin },
+    statement_descriptor: 'MICROFOODBR',
+  }
+  const response = await fetch(`${MP_API}/checkout/preferences`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify(preference),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || !data.init_point) {
+    console.error('Mercado Pago recusou a criação do checkout:', response.status, JSON.stringify(data).slice(0, 500))
+    return error('Não foi possível iniciar o pagamento agora', 502)
+  }
+  return json({ url: data.init_point })
+}
+
+function addDays(isoDate, days) {
+  const date = new Date(`${isoDate}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+async function mpWebhook(request, env, url) {
+  const secret = env.MP_WEBHOOK_SECRET
+  const token = mpToken(env)
+  if (!secret || !token) return error('Webhook não configurado', 503)
+  if (!await validMpSignature(request, url, secret)) return error('Assinatura inválida', 401)
+
+  let body = {}
+  try { body = await readJson(request, 16_384) } catch { /* o id também vem na query */ }
+  const type = url.searchParams.get('type') || url.searchParams.get('topic') || body?.type || body?.topic
+  if (type !== 'payment') return json({ ok: true, ignored: type || 'sem tipo' })
+  const paymentId = String(url.searchParams.get('data.id') || body?.data?.id || '').trim()
+  if (!/^\d{1,20}$/.test(paymentId)) return error('Pagamento inválido', 422)
+
+  const response = await fetch(`${MP_API}/v1/payments/${paymentId}`, { headers: { authorization: `Bearer ${token}` } })
+  if (!response.ok) {
+    console.error('Falha ao consultar pagamento no Mercado Pago:', paymentId, response.status)
+    return error('Não foi possível consultar o pagamento', 502)
+  }
+  const payment = await response.json()
+  if (payment.status !== 'approved') return json({ ok: true, status: payment.status })
+
+  const merchantId = Number(payment.external_reference)
+  if (!Number.isSafeInteger(merchantId) || merchantId < 1) return json({ ok: true, ignored: 'sem referência de comerciante' })
+  if (payment.currency_id !== 'BRL') return json({ ok: true, ignored: 'moeda diferente de BRL' })
+
+  const subscription = await env.DB.prepare('SELECT amount_cents, paid_until FROM subscriptions WHERE merchant_id = ?').bind(merchantId).first()
+  if (!subscription) return json({ ok: true, ignored: 'assinatura não encontrada' })
+  const amountCents = Math.round(Number(payment.transaction_amount) * 100)
+  if (!Number.isSafeInteger(amountCents) || amountCents < Number(subscription.amount_cents)) {
+    console.error('Valor pago menor que a assinatura:', paymentId, amountCents, subscription.amount_cents)
+    return json({ ok: true, ignored: 'valor menor que o da assinatura' })
+  }
+
+  const already = await env.DB.prepare('SELECT 1 AS found FROM payment_events WHERE external_id = ?').bind(paymentId).first()
+  if (already) return json({ ok: true, duplicate: true })
+
+  const today = new Date().toISOString().slice(0, 10)
+  const base = subscription.paid_until && subscription.paid_until > today ? subscription.paid_until : today
+  const paidUntil = addDays(base, SUBSCRIPTION_DAYS)
+  const payload = JSON.stringify({ method: 'mercado_pago', payment_id: paymentId, payment_type: payment.payment_type_id, paid_until: paidUntil })
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO payment_events (merchant_id, provider, external_id, status, amount_cents, payload) VALUES (?, 'mercado_pago', ?, 'paid', ?, ?)`).bind(merchantId, paymentId, amountCents, payload),
+      env.DB.prepare(`UPDATE subscriptions SET status = 'active', paid_until = ?, mercado_pago_payment_id = ?, updated_at = CURRENT_TIMESTAMP WHERE merchant_id = ?`).bind(paidUntil, paymentId, merchantId),
+      env.DB.prepare(`UPDATE merchants SET plan = 'monthly', status = 'active', next_billing_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(paidUntil, merchantId),
+    ])
+  } catch (err) {
+    if (String(err).toLowerCase().includes('unique')) return json({ ok: true, duplicate: true })
+    console.error('Falha ao registrar pagamento do Mercado Pago:', err)
+    return error('Não foi possível registrar o pagamento', 500)
+  }
+  return json({ ok: true, merchantId, paidUntil })
+}
+
+// ===== Guardiã do Repositório =====
+const GUARDIAN_MAX_CHARS = 12_000
+
+function guardianText(value) {
+  return typeof value === 'string' ? value.slice(0, GUARDIAN_MAX_CHARS) : ''
+}
+
+async function aiReview(request, env) {
+  if (!sameOrigin(request)) return error('Origem não autorizada', 403)
+
+  let body
+  try { body = await readJson(request, 65_536) } catch {
+    return error('JSON inválido ou muito grande', 413)
+  }
+
+  const filePath = cleanString(body?.path, 300)
+  const situation = cleanString(body?.situation, 30)
+  const newContent = guardianText(body?.newContent)
+  const oldContent = guardianText(body?.oldContent)
+
+  if (!filePath) return error('Informe o caminho do arquivo', 422)
+  if (!['novo', 'conflito', 'duplicado'].includes(situation)) {
+    return error('Situação inválida. Use: novo, conflito ou duplicado', 422)
+  }
+  if (!newContent) return error('Informe o conteúdo do arquivo novo', 422)
+
+  const lowerPath = filePath.toLowerCase()
+  const content = `${lowerPath}\n${newContent.toLowerCase()}\n${oldContent.toLowerCase()}`
+
+  const sensitiveTerms = [
+    'api_key', 'apikey', 'secret', 'senha', 'password', 'token',
+    'access_token', 'private_key', 'credential', 'credencial',
+    'sk-', 'postgres://', 'mysql://', 'mongodb://', 'supabase'
+  ]
+
+  const riskyTerms = [
+    'drop table', 'delete from', 'truncate table', 'rm -rf',
+    'eval(', 'child_process', 'curl | bash', 'http://', 'https://',
+    'mercadopago', 'stripe', 'pagamento', 'pix', 'cobrança', 'cobranca'
+  ]
+
+  const sensitive = sensitiveTerms.filter((term) => content.includes(term))
+  const risky = riskyTerms.filter((term) => content.includes(term))
+
+  let decision = 'entrar'
+  let confidence = 'alta'
+  let reason = 'Arquivo aparentemente seguro para integração.'
+  const risks = []
+  const steps = []
+
+  if (sensitive.length > 0) {
+    decision = 'acao_manual'
+    confidence = 'alta'
+    reason = 'O arquivo contém possíveis credenciais, chaves ou configurações sensíveis.'
+    risks.push(`Termos sensíveis encontrados: ${sensitive.join(', ')}.`)
+    steps.push('Revise o arquivo manualmente antes de integrar.')
+    steps.push('Remova chaves, senhas e dados privados antes de enviar.')
+  } else if (risky.length > 0) {
+    decision = 'acao_manual'
+    confidence = 'media'
+    reason = 'O arquivo contém termos que exigem revisão manual.'
+    risks.push(`Termos que exigem atenção: ${risky.join(', ')}.`)
+    steps.push('Confira se os links, comandos e integrações são legítimos.')
+  } else if (situation === 'conflito') {
+    decision = 'atualizar'
+    confidence = 'media'
+    reason = 'Há conteúdo anterior e a versão nova pode atualizar o repositório.'
+    steps.push('Compare as diferenças antes de confirmar a atualização.')
+  } else if (situation === 'duplicado') {
+    decision = 'manter_antigo'
+    confidence = 'media'
+    reason = 'Arquivo duplicado: mantenha a versão já existente, salvo indicação contrária.'
+    steps.push('Confirme se a versão nova traz melhoria real.')
+  }
+
+  return json({
+    ok: true,
+    path: filePath,
+    situation,
+    decision,
+    confidence,
+    reason,
+    risks,
+    steps,
+  })
+}
+
+async function serveAsset(request, env, url, path) {
+  if (!env.ASSETS) return new Response('Asset binding ASSETS não configurado', { status: 500 })
+  let assetRequest = request
+  const isAdminPage = path === '/admin' || path === '/admin.html'
+  if (path === '/admin' && request.method === 'GET') {
+    assetRequest = new Request(new URL('/admin.html', url), request)
+  }
+  const response = await env.ASSETS.fetch(assetRequest)
+  if (!isAdminPage) return response
+  const headers = new Headers(response.headers)
+  headers.set('cache-control', 'no-store')
+  headers.set('x-frame-options', 'DENY')
+  headers.set('referrer-policy', 'same-origin')
+  headers.set('content-security-policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none';")
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url)
+    const path = url.pathname.replace(/\/$/, '') || '/'
+
+    try {
+      if (path === '/api/admin/login' && request.method === 'POST') return await adminLogin(request, env)
+      if (path === '/api/admin/logout' && request.method === 'POST') return adminLogout()
+      if (path === '/api/admin/session' && request.method === 'GET') {
+        return await isAdmin(request, env) ? json({ ok: true }) : error('Não autorizado', 401)
+      }
+      if (path.startsWith('/api/admin/')) {
+        if (!await isAdmin(request, env)) return error('Não autorizado', 401)
+        if (path === '/api/admin/summary' && request.method === 'GET') return await adminSummary(env)
+        if (path === '/api/admin/merchants' && request.method === 'GET') return await listMerchants(request, env)
+        if (path === '/api/admin/orders' && request.method === 'GET') return await adminOrders(url, env)
+        const paymentMatch = path.match(/^\/api\/admin\/merchants\/(\d+)\/payments$/)
+        if (paymentMatch && request.method === 'POST') return await recordManualPayment(request, env, Number(paymentMatch[1]))
+        const orderMatch = path.match(/^\/api\/admin\/orders\/(\d+)$/)
+        if (orderMatch && request.method === 'PATCH') return await updateOrder(request, env, Number(orderMatch[1]))
+        return error('Rota administrativa não encontrada', 404)
+      }
+      if (path === '/api/health' && request.method === 'GET') {
+        await env.DB.prepare('SELECT 1').first()
+        return json({ ok: true })
+      }
+      if (path === '/api/menu' && request.method === 'GET') return await getMenu(url, env)
+      if (path === '/api/merchants' && request.method === 'POST') return await createMerchant(request, env)
+      if (path === '/api/merchants' && request.method === 'GET') return await listMerchants(request, env)
+      if (path === '/api/orders' && request.method === 'POST') return await createOrder(request, env)
+      if (path === '/api/checkout' && request.method === 'POST') return await createCheckout(request, env, url)
+      if (path === '/api/mp/webhook' && request.method === 'POST') return await mpWebhook(request, env, url)
+      if (path === '/api/orders' && request.method === 'GET') return await listOrders(request, env)
+      if (path === '/api/ai/review' && request.method === 'POST') return await aiReview(request, env)
+      if (path.startsWith('/api/')) return error('Rota não encontrada', 404)
+      return await serveAsset(request, env, url, path)
+    } catch (err) {
+      console.error('Erro não tratado no Worker:', err)
+      return error('Erro interno do servidor', 500)
+    }
+  },
+}
